@@ -1,17 +1,30 @@
 /**
  * تخزين النسخة الاحتياطية على الجهاز — **نسخة واحدة دائمًا**.
- * كل نسخة جديدة تحذف السابقة، فلا تتراكم ملفات ولا تمتلئ مساحة التخزين.
+ *
+ * تُحفظ في مخزن `meta` (سجل واحد بمفتاح ثابت): كل نسخة جديدة تستبدل السابقة،
+ * ولا نحتاج أي ترقية لمخطّط قاعدة البيانات — وهذا يمنع أي تعطّل لتطبيق مفتوح
+ * في تبويب آخر عند النشر.
  */
 
-import { getDB, readMeta, writeMeta, type BackupRow } from '@/data/local/db'
-import { backupDayKey, formatBytes, type BackupMeta, type BackupPayload } from '@/core/backup'
+import { getDB, readMeta, writeMeta } from '@/data/local/db'
+import { backupDayKey, formatBytes, defaultAutoBackup, type BackupMeta, type BackupPayload } from '@/core/backup'
 import type { Role } from '@/core/domain'
-import { defaultAutoBackup } from '@/core/backup'
 
 export const ROLLING_BACKUP_ID = 'latest'
+const BACKUP_KEY = 'dafatar.backup'
 const AUTO_KEY = 'dafatar.backup-auto'
 
-/* ============================ النسخة نفسها ============================ */
+/** سجل النسخة الواحدة المحفوظة */
+export interface BackupRow {
+  id: string
+  createdAt: string
+  dayKey: string
+  sizeBytes: number
+  counts: { parties: number; entries: number }
+  engine: string
+  profileName: string | null
+  payload: unknown
+}
 
 function toMeta(row: BackupRow): BackupMeta {
   return {
@@ -35,7 +48,6 @@ export function payloadSize(payload: BackupPayload): number {
 
 /** يحفظ نسخة جديدة بدل القديمة تمامًا */
 export async function saveRollingBackup(payload: BackupPayload, profileName: string | null = null): Promise<BackupMeta> {
-  const db = await getDB()
   const row: BackupRow = {
     id: ROLLING_BACKUP_ID,
     createdAt: payload.createdAt,
@@ -46,32 +58,24 @@ export async function saveRollingBackup(payload: BackupPayload, profileName: str
     profileName: payload.profile?.fullName ?? profileName,
     payload,
   }
-
-  const tx = db.transaction('backups', 'readwrite')
-  const existing = await tx.store.getAllKeys()
-  await Promise.all(existing.map((key) => tx.store.delete(key)))
-  await tx.store.put(row)
-  await tx.done
-
+  await writeMeta(BACKUP_KEY, row)
   return toMeta(row)
 }
 
 export async function readBackupMeta(): Promise<BackupMeta | null> {
-  const db = await getDB()
-  const row = (await db.get('backups', ROLLING_BACKUP_ID)) as BackupRow | undefined
+  const row = await readMeta<BackupRow | null>(BACKUP_KEY, null)
   return row ? toMeta(row) : null
 }
 
 export async function readRollingBackup(): Promise<{ meta: BackupMeta; payload: BackupPayload } | null> {
-  const db = await getDB()
-  const row = (await db.get('backups', ROLLING_BACKUP_ID)) as BackupRow | undefined
+  const row = await readMeta<BackupRow | null>(BACKUP_KEY, null)
   if (!row) return null
   return { meta: toMeta(row), payload: row.payload as BackupPayload }
 }
 
 export async function clearRollingBackup(): Promise<void> {
   const db = await getDB()
-  await db.delete('backups', ROLLING_BACKUP_ID)
+  await db.delete('meta', BACKUP_KEY)
 }
 
 /* ============================ تفضيل النسخ التلقائي ============================ */

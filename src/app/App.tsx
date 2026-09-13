@@ -1,6 +1,6 @@
 import { Component, useEffect, useState, type ReactNode } from 'react'
 import { createHashRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router-dom'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { WifiOff } from 'lucide-react'
 import { queryClient } from './queryClient'
 import { BootSplash, DataSourceProvider } from './DataSourceProvider'
@@ -30,6 +30,35 @@ import { useDailyBackupRunner } from './hooks/useBackup'
 
 /* ============================ حراسة المسارات ============================ */
 
+/** شاشة عطل واضحة مع إعادة محاولة — لا شاشة انتظار بلا نهاية */
+function FailureScreen({ message }: { message?: string }) {
+  const queryClient = useQueryClient()
+  return (
+    <div className="app-shell items-center justify-center p-6 text-center">
+      <p className="font-bold text-danger-600">تعذّر الوصول إلى دفترك</p>
+      <p className="mt-2 text-sm leading-6 text-ink-500">
+        {message ?? 'حدثت مشكلة في تخزين الجهاز أو في قراءة بيانات حسابك.'}
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          void queryClient.invalidateQueries()
+        }}
+        className="btn btn-primary mt-5 inline-flex h-11 items-center gap-2 px-6 text-[0.9375rem] font-extrabold"
+      >
+        إعادة المحاولة
+      </button>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="btn btn-ghost mt-2 inline-flex h-11 items-center gap-2 px-6 text-[0.9375rem] font-extrabold"
+      >
+        إعادة تحميل التطبيق
+      </button>
+    </div>
+  )
+}
+
 /** يتطلب جلسة — وإلا يعود للبداية مع تذكّر الوجهة */
 function RequireSession() {
   const session = useSession()
@@ -39,6 +68,7 @@ function RequireSession() {
     if (session.data === null) rememberPendingRoute(location.pathname + location.search)
   }, [session.data, location.pathname, location.search])
 
+  if (session.isError) return <FailureScreen />
   // لا نوجّه أثناء التحقق من الجلسة (أول تحميل أو إعادة جلب بعد الدخول)
   if (session.isLoading || (session.isFetching && !session.data)) return <BootSplash />
   if (!session.data) return <Navigate to="/welcome" replace />
@@ -48,6 +78,7 @@ function RequireSession() {
 /** يتطلب ملفًا شخصيًا مكتملًا (اختيار الدور) */
 function RequireProfile() {
   const profile = useProfile()
+  if (profile.isError) return <FailureScreen message="تعذّر تحميل ملفك الشخصي من هذا الجهاز." />
   if (profile.isLoading) return <BootSplash />
   if (!profile.data) return <Navigate to="/setup" replace />
   return <Outlet />
