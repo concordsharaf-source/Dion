@@ -20,7 +20,7 @@ export function PartyDetailScreen() {
   const entries = usePartyEntries(id)
   const relationships = useRelationships()
 
-  const [formType, setFormType] = useState<EntryType | null>(null)
+  const [openType, setOpenType] = useState<EntryType | null>(null)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
 
   const viewerId = profile.data?.id ?? ''
@@ -158,10 +158,10 @@ export function PartyDetailScreen() {
         </Card>
 
         <div className="grid grid-cols-2 gap-3">
-          <Button size="lg" icon={<Plus size={18} />} onClick={() => setFormType('debt')}>
+          <Button size="lg" icon={<Plus size={18} />} onClick={() => setOpenType('debt')}>
             تسجيل دين
           </Button>
-          <Button size="lg" variant="soft" icon={<TrendingUp size={18} />} onClick={() => setFormType('payment')}>
+          <Button size="lg" variant="soft" icon={<TrendingUp size={18} />} onClick={() => setOpenType('payment')}>
             تسجيل سداد
           </Button>
         </div>
@@ -197,7 +197,7 @@ export function PartyDetailScreen() {
                 title="لا توجد عمليات بعد"
                 hint="سجّل أول دين أو سداد لهذا السجل."
                 action={
-                  <Button icon={<Plus size={16} />} onClick={() => setFormType('debt')}>
+                  <Button icon={<Plus size={16} />} onClick={() => setOpenType('debt')}>
                     تسجيل أول دين
                   </Button>
                 }
@@ -250,11 +250,18 @@ export function PartyDetailScreen() {
         ) : null}
       </div>
 
+      {/* نافذتان مستقلتان: الدين نافذة، والسداد نافذة أخرى */}
       <EntryFormSheet
-        open={formType !== null}
-        onClose={() => setFormType(null)}
+        type="debt"
+        open={openType === 'debt'}
+        onClose={() => setOpenType(null)}
         defaultPartyId={p.id}
-        defaultType={formType ?? 'debt'}
+      />
+      <EntryFormSheet
+        type="payment"
+        open={openType === 'payment'}
+        onClose={() => setOpenType(null)}
+        defaultPartyId={p.id}
       />
       <EntryDetailSheet
         entryId={openEntryId}

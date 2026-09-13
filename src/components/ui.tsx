@@ -288,7 +288,8 @@ export function Sheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button
         type="button"
-        aria-label="إغلاق"
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px] fade-in"
       />

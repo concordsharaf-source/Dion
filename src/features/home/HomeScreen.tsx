@@ -18,7 +18,7 @@ export function HomeScreen() {
   const awaiting = useAwaitingCount()
   const unread = useUnreadCount()
 
-  const [formType, setFormType] = useState<EntryType | null>(null)
+  const [openType, setOpenType] = useState<EntryType | null>(null)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
 
   const isMerchant = profile.data?.role === 'merchant'
@@ -118,10 +118,10 @@ export function HomeScreen() {
 
         {/* إجراءات سريعة */}
         <div className="grid grid-cols-2 gap-3">
-          <Button size="lg" icon={<Plus size={18} />} onClick={() => setFormType('debt')}>
+          <Button size="lg" icon={<Plus size={18} />} onClick={() => setOpenType('debt')}>
             تسجيل دين
           </Button>
-          <Button size="lg" variant="soft" icon={<TrendingUp size={18} />} onClick={() => setFormType('payment')}>
+          <Button size="lg" variant="soft" icon={<TrendingUp size={18} />} onClick={() => setOpenType('payment')}>
             تسجيل سداد
           </Button>
         </div>
@@ -202,11 +202,9 @@ export function HomeScreen() {
         </section>
       </div>
 
-      <EntryFormSheet
-        open={formType !== null}
-        onClose={() => setFormType(null)}
-        defaultType={formType ?? 'debt'}
-      />
+      {/* نافذتان مستقلتان: الدين نافذة، والسداد نافذة أخرى */}
+      <EntryFormSheet type="debt" open={openType === 'debt'} onClose={() => setOpenType(null)} />
+      <EntryFormSheet type="payment" open={openType === 'payment'} onClose={() => setOpenType(null)} />
       <EntryDetailSheet
         entryId={openEntryId}
         open={openEntryId !== null}

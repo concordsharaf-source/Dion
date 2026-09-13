@@ -27,6 +27,13 @@ afterEach(async () => {
   queryClient.clear()
 })
 
+/** إدخال مبلغ من لوحة الأرقام الداخلية */
+async function keypad(user: ReturnType<typeof userEvent.setup>, digits: string) {
+  for (const d of digits) {
+    await user.click(await screen.findByRole('button', { name: d }))
+  }
+}
+
 /** يبدأ دفترًا جديدًا بدور محدّد ويعيد اسم المستخدم */
 async function startBook(role: 'عميل' | 'تاجر', name: string) {
   const user = userEvent.setup()
@@ -73,12 +80,46 @@ describe('التطبيق — مسار العميل المستقل', () => {
     await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
 
     const amountInput = await screen.findByLabelText('المبلغ', undefined, { timeout: 5000 })
-    await user.type(amountInput, '20000')
+    expect(amountInput).toHaveValue('0')
+    await keypad(user, '20000')
+    expect(amountInput).toHaveValue('20,000')
     await user.click(screen.getByRole('button', { name: 'تسجيل الدين' }))
 
     // العملية تظهر في سجل المحل بالمبلغ الصحيح
     const list = await screen.findByRole('button', { name: /دين سجّلته/ }, { timeout: 5000 })
     expect(within(list).getByText(/20,000|20٬000/)).toBeInTheDocument()
+  })
+})
+
+describe('نافذتا الدين والسداد', () => {
+  it('كل نافذة مستقلة، وتُفتح على خانة المبلغ مع لوحة أرقام', async () => {
+    const user = await startBook('تاجر', 'متجر الفرقان')
+
+    // نافذة الدين
+    await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
+    expect(await screen.findByRole('button', { name: 'تسجيل الدين' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'تسجيل السداد' })).not.toBeInTheDocument()
+
+    // تُفتح مباشرة على خانة المبلغ
+    const amount = screen.getByLabelText('المبلغ')
+    await waitFor(() => expect(document.activeElement).toBe(amount), { timeout: 3000 })
+    expect(amount).toHaveValue('0')
+
+    await user.click(screen.getByRole('button', { name: 'إغلاق' }))
+
+    // نافذة السداد (مستقلة تمامًا)
+    await user.click(await screen.findByRole('button', { name: 'تسجيل سداد' }, { timeout: 5000 }))
+    expect(await screen.findByRole('button', { name: 'تسجيل السداد' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'تسجيل الدين' })).not.toBeInTheDocument()
+
+    // إدخال سريع من لوحة الأرقام + حذف + إضافة سريعة
+    await keypad(user, '2500')
+    const paid = screen.getByLabelText('المبلغ')
+    expect(paid).toHaveValue('2,500')
+    await user.click(screen.getByRole('button', { name: 'حذف' }))
+    expect(paid).toHaveValue('250')
+    await user.click(screen.getByRole('button', { name: /\+1,000/ }))
+    expect(paid).toHaveValue('1,250')
   })
 })
 
@@ -117,10 +158,11 @@ describe('التطبيق — مسار التاجر المستقل', () => {
 
     await user.click(await screen.findByRole('button', { name: 'تسجيل سداد' }, { timeout: 5000 }))
 
-    const amountInput = await screen.findByLabelText('المبلغ', undefined, { timeout: 5000 })
-    await user.type(amountInput, '12000')
-    await user.click(screen.getByRole('button', { name: 'تسجيل السداد' }))
+    await keypad(user, '12000')
+    expect(screen.getByLabelText('المبلغ')).toHaveValue('12,000')
 
-    expect(await screen.findByRole('alert', undefined, { timeout: 5000 })).toHaveTextContent('مبلغ السداد أكبر من الرصيد المتبقي')
+    // تحذير فوري + منع الإرسال قبل الوصول لطبقة البيانات
+    expect(await screen.findByRole('alert', undefined, { timeout: 5000 })).toHaveTextContent('المبلغ أكبر من المتبقي')
+    expect(screen.getByRole('button', { name: 'تسجيل السداد' })).toBeDisabled()
   })
 })
