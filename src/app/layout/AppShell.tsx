@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
+import { ExitGuard } from './ExitGuard'
 import { useEffect } from 'react'
 
 /**
@@ -20,6 +21,8 @@ export function AppShell() {
         <Outlet />
       </main>
       <BottomNav />
+      {/* حارس الخروج: الرجوع من الرئيسية لا يُخرج إلا بتأكيد */}
+      <ExitGuard />
     </div>
   )
 }

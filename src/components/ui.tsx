@@ -17,6 +17,7 @@ import {
 import { X } from 'lucide-react'
 import clsx from 'clsx'
 import { formatAmount, getCurrency } from '@/core/money'
+import { beginOverlay, endOverlay } from './overlayGuard'
 import type { EntryStatus, FinancialEntry } from '@/core/domain'
 
 /* ============================ أزرار ============================ */
@@ -275,6 +276,7 @@ export function Sheet({
 
   useEffect(() => {
     if (!open) return
+    beginOverlay()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -283,6 +285,7 @@ export function Sheet({
     document.body.style.overflow = 'hidden'
     ref.current?.focus()
     return () => {
+      endOverlay()
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previous
     }
