@@ -138,6 +138,23 @@ export interface DeviceAccount {
   email?: string | null
 }
 
+/* ============================ إشعارات الدفع ============================ */
+
+/** اشتراك دفع محفوظ في الخادم (Web Push) */
+export interface StoredPushSubscription {
+  endpoint: string
+  p256dh: string
+  auth: string
+  userAgent: string | null
+}
+
+/** تطبيق إشعارات الويب — يُنفّذه المحرّك السحابي فقط */
+export interface PushPort {
+  saveSubscription(input: StoredPushSubscription): Promise<void>
+  removeSubscription(endpoint: string): Promise<void>
+  hasSubscription(endpoint: string): Promise<boolean>
+}
+
 /* ============================ الأطراف (محل / عميل) ============================ */
 
 export interface CreatePartyDTO {
@@ -285,6 +302,8 @@ export interface DataSource {
   links: LinkPort
   notifications: NotificationPort
   sync: SyncPort
+  /** اشتراكات إشعارات الدفع — الوضع السحابي فقط */
+  push?: PushPort
   /** الأحداث اللحظية (Realtime) */
   subscribe(cb: (event: DataEvent) => void): () => void
   /** تفريغ كل بيانات المستخدم الحالي (للتطوير/الخروج الكامل) */

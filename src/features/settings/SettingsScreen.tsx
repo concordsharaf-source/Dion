@@ -33,6 +33,8 @@ import { queryClient, qk } from '@/app/queryClient'
 import { playFeedback, readSoundEnabled, writeSoundEnabled } from '@/core/sound'
 import { readLockConfig } from '@/core/appLock'
 import { DesignerContactCard } from './DesignerContactCard'
+import { PushToggle } from './PushToggle'
+import { CloudAccountSection } from './CloudAccountSection'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -277,8 +279,13 @@ export function SettingsScreen() {
                 <span className={clsx('absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all', sound ? 'start-1' : 'start-6')} />
               </button>
             </div>
+
+            <PushToggle />
           </Card>
         </section>
+
+        {/* الحساب السحابي (يظهر فقط إذا كانت مفاتيح المشروع مضبوطة) */}
+        <CloudAccountSection />
 
         {/* المشاركة */}
         <section>

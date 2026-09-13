@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { RELOAD_GUARD_KEY, shouldReloadOnControllerChange, swUrl } from './pwa'
 
@@ -24,5 +25,28 @@ describe('تحديث التطبيق تلقائيًا (Service Worker)', () => {
 
   it('يملك مفتاح حرس ثابتًا لتفادي إعادة التحميل المتكررة', () => {
     expect(RELOAD_GUARD_KEY).toBe('dafatar.sw-reloaded')
+  })
+})
+
+describe('إشعارات الدفع داخل Service Worker', () => {
+  const source = readFileSync('public/push-sw.js', 'utf8')
+
+  it('يستقبل حدث push ويعرض إشعارًا', () => {
+    expect(source).toContain("addEventListener('push'")
+    expect(source).toContain('showNotification')
+  })
+
+  it('يفتح شاشة التطبيق عند النقر على الإشعار', () => {
+    expect(source).toContain("addEventListener('notificationclick'")
+    expect(source).toContain('openWindow')
+  })
+
+  it('بلا أي سرّ داخله (لا مفاتيح ولا توكنات)', () => {
+    expect(source).not.toMatch(/VAPID_PRIVATE|service_role|sbp_|eyJ/)
+  })
+
+  it('محمّل داخل الـ SW المُولَّد من إعداد Vite', () => {
+    const config = readFileSync('vite.config.ts', 'utf8')
+    expect(config).toContain("importScripts: ['push-sw.js']")
   })
 })

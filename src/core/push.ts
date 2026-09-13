@@ -1,0 +1,41 @@
+/**
+ * منطق الدفع (Push) الصرف — بلا DOM، قابل للاختبار.
+ */
+
+const VAPID_PUBLIC_KEY = (import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? ''
+/** مفتاح الإشعارات العام (VAPID) — إن لم يُضبط تظهر رسالة واضحة */
+export function getVapidPublicKey(): string {
+  return VAPID_PUBLIC_KEY.trim()
+}
+
+interface NavLike {
+  serviceWorker?: unknown
+  permissions?: { query?: (descriptor: { name: string }) => Promise<{ state: string }> }
+}
+
+/** هل يدعم هذا المتصفح إشعارات الدفع؟ (يحتاج Service Worker + PushManager + Notification) */
+export function isPushSupported(nav: unknown = typeof navigator === 'undefined' ? {} : navigator, win: unknown = typeof window === 'undefined' ? {} : window): boolean {
+  const n = nav as NavLike | null
+  const w = win as { PushManager?: unknown; Notification?: unknown } | null
+  if (!n || !n.serviceWorker) return false
+  if (!w || typeof w.PushManager === 'undefined') return false
+  return true
+}
+
+/** هل الإشعارات مسموحة الآن؟ */
+export function isPermissionGranted(permission: string | undefined): boolean {
+  return permission === 'granted'
+}
+
+/** عنوان الإشعار القادم من الخادم (مع نص احتياطي) */
+export function pushTitle(payload: { title?: string | null; body?: string | null } | null): string {
+  return payload?.title?.trim() || 'دفتر الديون'
+}
+
+/** مسار الشاشة التي يُفتح عليها الإشعار عند النقر */
+export function pushTargetUrl(payload: { url?: string | null } | null): string {
+  const url = payload?.url?.trim()
+  if (!url) return '/#/notifications'
+  if (url.startsWith('#')) return `/${url}`
+  return url
+}

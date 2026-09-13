@@ -14,6 +14,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
+  PushPort,
+  StoredPushSubscription,
   AuthPort,
   AuthSession,
   CreateEntryDTO,
@@ -547,6 +549,51 @@ export class SupabaseDataSource implements DataSource {
       if (verifyError) throw appError('forbidden', undefined, 'كلمة المرور الحالية غير صحيحة')
       const { error } = await this.client.auth.updateUser({ password: newPassword })
       if (error) mapError(error)
+    },
+  }
+
+  /* ============================ إشعارات الدفع ============================ */
+
+  readonly push: PushPort = {
+    /** حفظ اشتراك المتصفح لهذا المستخدم (نفس الاشتراك يُحدَّث بلا تكرار) */
+    saveSubscription: async (input: StoredPushSubscription) => {
+      const uid = await this.requireUserId()
+      const { error } = await this.client.from('push_subscriptions').upsert(
+        {
+          user_id: uid,
+          endpoint: input.endpoint,
+          p256dh: input.p256dh,
+          auth: input.auth,
+          user_agent: input.userAgent,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: 'endpoint' },
+      )
+      if (error) mapError(error)
+    },
+
+    /** حذف الاشتراك عند إيقاف الإشعارات */
+    removeSubscription: async (endpoint: string) => {
+      const uid = await this.requireUserId()
+      const { error } = await this.client
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', uid)
+        .eq('endpoint', endpoint)
+      if (error) mapError(error)
+    },
+
+    /** هل هذا الاشتراك محفوظ لهذا المستخدم؟ */
+    hasSubscription: async (endpoint: string) => {
+      const uid = await this.requireUserId()
+      const { data, error } = await this.client
+        .from('push_subscriptions')
+        .select('endpoint')
+        .eq('user_id', uid)
+        .eq('endpoint', endpoint)
+        .maybeSingle()
+      if (error) mapError(error)
+      return Boolean(data)
     },
   }
 

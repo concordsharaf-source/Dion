@@ -20,6 +20,7 @@ export default defineConfig({
       injectRegister: null,
       strategies: 'generateSW',
       includeAssets: [
+        'push-sw.js',
         'favicon.svg',
         'favicon.ico',
         'apple-touch-icon.png',
@@ -54,6 +55,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // سكربت إشعارات الدفع يُحمَّل داخل الـ SW المُولَّد (يعمل والتطبيق مغلق)
+        importScripts: ['push-sw.js'],
         globPatterns: ['**/*.{js,css,woff2,png,svg,ico,webmanifest}'],
         // HTML لا يُخزَّن مسبقًا أبدًا: يُخدَم من الشبكة (NetworkFirst أدناه)
         // ⇒ أول تحديث للصفحة يُظهر دائمًا أحدث نسخة من التطبيق
