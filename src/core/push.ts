@@ -2,10 +2,12 @@
  * منطق الدفع (Push) الصرف — بلا DOM، قابل للاختبار.
  */
 
-const VAPID_PUBLIC_KEY = (import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? ''
-/** مفتاح الإشعارات العام (VAPID) — إن لم يُضبط تظهر رسالة واضحة */
+/**
+ * مفتاح الإشعارات العام (VAPID) — إن لم يُضبط تظهر رسالة واضحة.
+ * يُقرأ وقت الاستدعاء (لا وقت تحميل الوحدة) حتى يمكن ضبطه/اختباره ديناميكيًا.
+ */
 export function getVapidPublicKey(): string {
-  return VAPID_PUBLIC_KEY.trim()
+  return ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
 }
 
 interface NavLike {

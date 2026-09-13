@@ -10,3 +10,6 @@ coverage
 playwright-report
 test-results
 .vite
+
+# مجلّد مؤقّت ينشئه Supabase CLI عند الربط
+supabase/.temp

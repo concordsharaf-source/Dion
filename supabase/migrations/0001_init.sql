@@ -699,8 +699,10 @@ $$;
 
 -- ============================ 10) الربط بين الطرفين ============================
 
+-- ملاحظة: على Supabase تُثبَّت pgcrypto في مخطط extensions، لذا نضيفه إلى search_path
+-- حتى يعمل gen_random_bytes (وفي التثبيت المحلي يبقى public كافيًا).
 create or replace function public.create_link_invite() returns jsonb
-language plpgsql security definer set search_path = public, pg_temp as $$
+language plpgsql security definer set search_path = public, extensions, pg_temp as $$
 declare
   v_uid uuid := auth.uid();
   v_profile public.profiles;

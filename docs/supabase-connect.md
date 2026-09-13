@@ -55,6 +55,7 @@
 1. **متغيّرات البيئة** — انسخ `.env.example` إلى `.env.local` واملأ `VITE_SUPABASE_URL` و`VITE_SUPABASE_ANON_KEY`.
    في الاستضافة (Vercel/Netlify) أضف نفس المتغيّرين في Environment Variables.
 2. **المخطّط** — نفّذ محتوى `supabase/migrations/0001_init.sql` في SQL Editor.
+   (على مشروع `dion` الحالي هذا **منفَّذ أصلًا** — راجع القسم 3.5، فلا تُعِد تنفيذه.)
    يحوي: `profiles, parties, relationships, link_requests, balance_proposals, financial_entries,
    notifications, audit_logs, settings` + الفهارس + RLS الصارم + الدوال المالية المؤمّنة
    (`create_entry`, `confirm_entry`, `reject_entry`, `cancel_entry`, `create_link_invite`, `claim_link_invite`,
@@ -65,6 +66,34 @@
    (مثل `https://<نطاقك>/#/` و`http://localhost:5173/#/`).
 4. **التحقق** — أنشئ حسابًا، ثم: `profiles` فيه صفك، وتظهر `parties/financial_entries` بين جهازين
    بنفس الحساب، وتصل `notifications` لحظيًا.
+
+## 3.5) حالة الربط الفعلية — مشروع `dion` ✅
+
+> نُفِّذ فعليًا واختُبر من طرف إلى طرف على المشروع: `pyjjaekcqbdijcyloqvx` (اسمه `dion`، المنطقة `ap-northeast-2`).
+> هذا القسم سجلٌّ لما هو مضبوط الآن، وليس خطوات مطلوبة منك.
+
+| البند | الحالة |
+| --- | --- |
+| المخطّط `0001_init.sql` | موجود أصلًا على المشروع (17 جدولًا + RLS + الدوال) — لا حاجة لتنفيذه |
+| `0002_push_notifications.sql` | منفَّذ: جدول الاشتراكات مُرقّى + Trigger الدفع + سياسات RLS |
+| الدالة `send-push` | منشورة (v1) مع `--no-verify-jwt`، والأسرار مضبوطة (VAPID + `PUSH_HOOK_SECRET`) |
+| `push_settings.function_url` | `https://pyjjaekcqbdijcyloqvx.functions.supabase.co/send-push` |
+| Auth | `site_url = http://localhost:5173`، وRedirect URLs تشمل `https://*.e2b.app` وVercel/Netlify، و«تأكيد البريد» مُعطَّل |
+| `.env.local` | `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (publishable) + `VITE_VAPID_PUBLIC_KEY` |
+
+### اختبار شامل نُفِّذ على المشروع (ونجح)
+تسجيل مستخدمين (تاجر/عميل) ← ملفان شخصيان ← إضافة عميل ← دعوة ربط رمزية ← معاينة الرمز ←
+المطالبة ← القبول ← علاقة `verified` ← تسجيل دين مشترك ← إشعار للعميل ← تأكيد العميل ←
+`relationship_remaining = 2500000` ← التحقق من عزل RLS (العميل لا يرى أي صف غير مرتبط)
+← وصول الإشعار إلى دالة `send-push` فعليًا من القاعدة عبر `pg_net` (ردّها `{"sent":0,"reason":"no_subscriptions"}` لأن الأجهزة لم تشترك بعد).
+
+### درسان مهمّان ظهرا عند التنفيذ الحقيقي (منعًا لتكرارهما)
+1. **`pgcrypto` تُثبَّت في مخطط `extensions` على Supabase**، لذا أي دالة تستخدم `gen_random_bytes`
+   يجب أن يكون `search_path` فيها: `public, extensions, pg_temp` — وإلا: `function gen_random_bytes(integer) does not exist`.
+   (مُصلَح في `create_link_invite` داخل `0001_init.sql`.)
+2. **جدول `push_subscriptions` القديم كان فيه عمود `keys jsonb not null`**، وهو يمنع العملاء الجدد
+   (يكتبون `p256dh`/`auth`) من الاشتراك. `0002` الآن: يُلغي شرط NOT NULL، ويضيف مُشغّل
+   `push_subscriptions_sync_keys` يزامن الشكلين في الاتجاهين (قديم ↔ جديد) بلا فقدان أي صف.
 
 ## 4) الإشعارات حتى والتطبيق مغلق (Web Push)
 

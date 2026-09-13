@@ -8,6 +8,9 @@ import { getVapidPublicKey, isPermissionGranted, isPushSupported, pushTargetUrl,
 import { disablePush, enablePush, pushSupported, toStored, urlBase64ToUint8Array } from './push'
 import type { PushPort } from '@/data/port'
 
+/** مفتاح VAPID عام للاختبار (65 بايت بصيغة base64url) */
+const TEST_VAPID_KEY = 'BPbddHmjbgRMOUVoQ6z7cE3olOo4bKYxBXxj_UsoepYHJ4_7gp6CunDbT1z8eQaNRSGsjXt-6ZO70D4DYyqRnHo'
+
 /* ---------------------------- أدوات الاختبار ---------------------------- */
 
 function makePort(): PushPort & { saved: unknown[]; removed: string[] } {
@@ -56,6 +59,7 @@ const originalSW = Object.getOwnPropertyDescriptor(Navigator.prototype, 'service
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   delete (navigator as { serviceWorker?: unknown }).serviceWorker
   delete (window as { PushManager?: unknown }).PushManager
   void originalSW
@@ -110,13 +114,27 @@ describe('تفعيل الإشعارات', () => {
     if (!result.ok) expect(result.reason).toBe('local')
   })
 
-  it('يشترك ويحفظ الاشتراك في قاعدة البيانات', async () => {
+  it('بلا مفتاح VAPID: رسالة واضحة ولا اشتراك (لا فشل صامت)', async () => {
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '')
     installPushEnv(fakeSubscription('https://push.example/one'))
     const port = makePort()
     const result = await enablePush(port)
-    // في بيئة الاختبار لا يوجد مفتاح VAPID ⇒ رسالة واضحة (لا فشل صامت)
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(['missing-key', 'unsupported']).toContain(result.reason)
+    if (!result.ok) expect(result.reason).toBe('missing-key')
+    expect(port.saved).toHaveLength(0)
+  })
+
+  it('بمفتاح VAPID: يشترك ويحفظ الاشتراك في قاعدة البيانات', async () => {
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', TEST_VAPID_KEY)
+    installPushEnv(fakeSubscription('https://push.example/one'))
+    const port = makePort()
+    const result = await enablePush(port)
+    expect(result).toEqual({ ok: true, endpoint: 'https://push.example/one' })
+    expect(port.saved[0]).toMatchObject({
+      endpoint: 'https://push.example/one',
+      p256dh: 'pKey',
+      auth: 'aKey',
+    })
   })
 
   it('يرفض عند عدم السماح بالإشعارات', async () => {
