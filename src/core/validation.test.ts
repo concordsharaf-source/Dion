@@ -31,12 +31,15 @@ describe('تنقية النصوص', () => {
 })
 
 describe('أرقام الهاتف', () => {
-  it('يوحّد الصيغ اليمنية', () => {
-    expect(normalizePhoneNumber('0771234567')).toBe('+967771234567')
-    expect(normalizePhoneNumber('771234567')).toBe('+967771234567')
-    expect(normalizePhoneNumber('+967 771 234 567')).toBe('+967771234567')
-    expect(normalizePhoneNumber('00967771234567')).toBe('+967771234567')
-    expect(normalizePhoneNumber('٧٧١٢٣٤٥٦٧')).toBe(null)
+  it('يوحّد الصيغ المحلية بلا مفتاح دولة', () => {
+    expect(normalizePhoneNumber('0771234567')).toBe('771234567')
+    expect(normalizePhoneNumber('771234567')).toBe('771234567')
+    expect(normalizePhoneNumber('771 234 567')).toBe('771234567')
+    expect(normalizePhoneNumber('٧٧١٢٣٤٥٦٧')).toBe('771234567')
+    // مفتاح الدولة يُزال إن كتبه المستخدم — ولا يُضيفه التطبيق أبدًا
+    expect(normalizePhoneNumber('+967 771 234 567')).toBe('771234567')
+    expect(normalizePhoneNumber('00967771234567')).toBe('771234567')
+    expect(normalizePhoneNumber('967771234567')).toBe('771234567')
   })
 
   it('يرفض الأرقام غير الصالحة', () => {
@@ -45,8 +48,12 @@ describe('أرقام الهاتف', () => {
     expect(normalizePhoneNumber(undefined)).toBe(null)
   })
 
-  it('يعرض الرقم بصيغة مقروءة', () => {
+  it('يعرض الرقم بصيغة مقروءة بلا مفتاح دولة', () => {
+    expect(displayPhone('771234567')).toBe('771 234 567')
+    // حتى الأرقام المحفوظة قديمًا بمفتاح الدولة تُعرض محلية
     expect(displayPhone('+967771234567')).toBe('771 234 567')
+    expect(displayPhone('00967771234567')).toBe('771 234 567')
+    expect(displayPhone('0771234567')).toBe('771 234 567')
     expect(displayPhone(null)).toBe('')
   })
 })
@@ -56,7 +63,7 @@ describe('مخطط الطرف (محل/عميل)', () => {
     const r = validate(partySchema, { name: 'بقالة النور', phone: '0771234567', openingAmount: '50,000' })
     expect(r.success).toBe(true)
     expect(r.data?.name).toBe('بقالة النور')
-    expect(r.data?.phone).toBe('+967771234567')
+    expect(r.data?.phone).toBe('771234567')
     expect(r.data?.openingAmount).toBe(5_000_000)
   })
 

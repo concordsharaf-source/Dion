@@ -43,7 +43,7 @@ describe('زر استيراد جهات الاتصال', () => {
     await user.upload(input, new File([VCARD_ONE], 'contact.vcf', { type: 'text/vcard' }))
 
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1))
-    expect(onPick).toHaveBeenCalledWith({ name: 'أحمد محمد', phone: '+967771234567' })
+    expect(onPick).toHaveBeenCalledWith({ name: 'أحمد محمد', phone: '771234567' })
     expect(await screen.findByText('تم استيراد جهة الاتصال')).toBeInTheDocument()
   })
 
@@ -79,6 +79,6 @@ describe('زر استيراد جهات الاتصال', () => {
 
     await user.upload(input, new File([csv], 'contacts.csv', { type: 'text/csv' }))
 
-    await waitFor(() => expect(onPick).toHaveBeenCalledWith({ name: 'سعيد علي', phone: '+967733222111' }))
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith({ name: 'سعيد علي', phone: '733222111' }))
   })
 })

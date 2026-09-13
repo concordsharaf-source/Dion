@@ -5,6 +5,7 @@ import { Button, Field, Input, Money, Sheet, Skeletons, useToast } from '@/compo
 import { useCreateEntry, useFilteredParties } from '@/app/hooks/useData'
 import { useProfile } from '@/app/hooks/useAuth'
 import { sanitizeMultiline, sanitizeText } from '@/core/validation'
+import { displayPhone } from '@/core/validation'
 import { getCurrency, readAmount, SCALE } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
 import { uuid } from '@/core/id'
@@ -321,7 +322,7 @@ export function EntryFormSheet({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-bold">{p.name}</span>
                     <span className="block text-[0.6875rem] text-ink-500">
-                      {p.phone ? <span dir="ltr">{p.phone}</span> : 'بلا رقم'}
+                      {p.phone ? <span dir="ltr">{displayPhone(p.phone)}</span> : 'بلا رقم'}
                     </span>
                   </span>
                   {p.linkStatus === 'verified' ? (

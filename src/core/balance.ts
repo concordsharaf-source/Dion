@@ -210,9 +210,13 @@ export function normalizeArabic(input: string): string {
     .replace(/\s+/g, ' ')
 }
 
-/** أرقام فقط للمقارنة بالهاتف */
+/** أرقام فقط للمقارنة بالهاتف — بلا مفتاح دولة وبلا صفر بداية */
 export function normalizePhone(input: string): string {
-  return input.replace(/[^\d+]/g, '').replace(/^\+?967/, '').replace(/^0+/, '')
+  return input
+    .replace(/\D/g, '')
+    .replace(/^00/, '')
+    .replace(/^967/, '')
+    .replace(/^0+/, '')
 }
 
 export interface FilterOptions {

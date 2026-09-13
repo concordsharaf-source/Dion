@@ -19,18 +19,24 @@ export interface ImportedContact {
 
 /* ============================ أدوات مساعدة ============================ */
 
-/** ينظّف رقم الهاتف من التنسيقات ليصبح صالحًا للإدخال: +967771234567 */
+/**
+ * ينظّف رقم الهاتف من التنسيقات ليصبح صالحًا للإدخال — **بلا مفتاح دولة**:
+ *   «+967 771-234-567» ← «771234567»
+ */
 export function cleanPhone(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const trimmed = raw.trim()
   if (!trimmed) return null
   let value = trimmed.replace(/[\u200e\u200f\u00a0]/g, '').replace(/^tel:/i, '').trim()
   // يحوّل الأرقام العربية إلى لاتينية قبل الفحص
-  value = value.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-  const plus = value.trim().startsWith('+') || value.trim().startsWith('00')
+  value = value
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
   const digits = value.replace(/\D/g, '')
   if (digits.length < 6) return null
-  return plus ? `+${digits.replace(/^00/, '')}` : digits
+  // نزيل مفتاح الدولة إن وُجد ونُبقي الرقم محليًا
+  const local = digits.replace(/^00/, '').replace(/^967/, '').replace(/^0+/, '')
+  return local || null
 }
 
 /** هل يوجد منتقي جهات اتصال أصلي (Contact Picker API — كروم على أندرويد)؟ */

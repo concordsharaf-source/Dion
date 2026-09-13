@@ -92,6 +92,22 @@ describe('التطبيق — مسار العميل المستقل', () => {
     const list = await screen.findByRole('button', { name: /دين سجّلته/ }, { timeout: 5000 })
     expect(within(list).getByText(/20,000|20٬000/)).toBeInTheDocument()
   })
+
+  it('لا يُضيف مفتاح دولة لأرقام الهاتف، ويُزيله إن كتبه المستخدم', async () => {
+    const user = await startBook('عميل', 'نبيل أحمد')
+
+    await user.click(await screen.findByRole('link', { name: 'الديون' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('button', { name: 'إضافة محل جديد' }, { timeout: 5000 }))
+    await user.type(await screen.findByLabelText(/^الاسم/), 'بقالة الفتح')
+    // رقم مكتوب بمفتاح الدولة ومسافات
+    await user.type(screen.getByLabelText(/^رقم الهاتف/), '+967 733 222 111')
+    await user.click(screen.getByRole('button', { name: 'إضافة محل' }))
+
+    // يُعرض محليًا بلا مفتاح دولة
+    expect(await screen.findByRole('heading', { name: 'بقالة الفتح' }, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByText('733 222 111')).toBeInTheDocument()
+    expect(screen.queryByText(/967/)).not.toBeInTheDocument()
+  })
 })
 
 describe('نافذتا الدين والسداد', () => {

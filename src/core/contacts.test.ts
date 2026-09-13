@@ -22,12 +22,12 @@ describe('جهات الاتصال — vCard', () => {
       'END:VCARD',
     ].join('\r\n')
 
-    expect(parseVCards(vcf)).toEqual([{ name: 'أحمد محمد', phone: '+967771234567' }])
+    expect(parseVCards(vcf)).toEqual([{ name: 'أحمد محمد', phone: '771234567' }])
   })
 
   it('يبني الاسم من N حين لا يوجد FN (vCard 4.0)', () => {
     const vcf = ['BEGIN:VCARD', 'VERSION:4.0', 'N:الشامي;سامي;;;', 'TEL:+967733222111', 'END:VCARD'].join('\n')
-    expect(parseVCards(vcf)).toEqual([{ name: 'سامي الشامي', phone: '+967733222111' }])
+    expect(parseVCards(vcf)).toEqual([{ name: 'سامي الشامي', phone: '733222111' }])
   })
 
   it('يفضّل الجوال على العمل ويتجاهل الفاكس', () => {
@@ -40,7 +40,7 @@ describe('جهات الاتصال — vCard', () => {
       'END:VCARD',
     ].join('\n')
 
-    expect(parseVCards(vcf)[0]!.phone).toBe('+967733222111')
+    expect(parseVCards(vcf)[0]!.phone).toBe('733222111')
   })
 
   it('يتعامل مع بادئة المجموعة في تصدير آبل: item1.TEL', () => {
@@ -52,7 +52,7 @@ describe('جهات الاتصال — vCard', () => {
       'END:VCARD',
     ].join('\n')
 
-    expect(parseVCards(vcf)[0]).toEqual({ name: 'خالد', phone: '+967711111111' })
+    expect(parseVCards(vcf)[0]).toEqual({ name: 'خالد', phone: '711111111' })
   })
 
   it('يفتح الأسطر المطويّة داخل القيمة', () => {
@@ -103,7 +103,7 @@ describe('جهات الاتصال — CSV', () => {
     ].join('\n')
 
     expect(parseContactsCsv(csv)).toEqual([
-      { name: 'أحمد محمد, الشامي', phone: '+967771234567' },
+      { name: 'أحمد محمد, الشامي', phone: '771234567' },
       { name: 'سعيد علي', phone: '733222111' },
     ])
   })
@@ -139,10 +139,12 @@ describe('جهات الاتصال — CSV', () => {
 
 describe('جهات الاتصال — أدوات', () => {
   it('ينظّف الأرقام بكل صيغها', () => {
-    expect(cleanPhone('+967 771-234-567')).toBe('+967771234567')
-    expect(cleanPhone('tel:+967711111111')).toBe('+967711111111')
-    expect(cleanPhone('00967711222333')).toBe('+967711222333')
-    expect(cleanPhone('٠٧٧١٢٣٤٥٦٧')).toBe('0771234567')
+    // بلا مفتاح دولة: يُزال المفتاح والصفر، ويبقى الرقم المحلي
+    expect(cleanPhone('+967 771-234-567')).toBe('771234567')
+    expect(cleanPhone('tel:+967711111111')).toBe('711111111')
+    expect(cleanPhone('00967711222333')).toBe('711222333')
+    expect(cleanPhone('٠٧٧١٢٣٤٥٦٧')).toBe('771234567')
+    expect(cleanPhone('777123456')).toBe('777123456')
     expect(cleanPhone('abc')).toBeNull()
     expect(cleanPhone('')).toBeNull()
   })

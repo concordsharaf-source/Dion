@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button, Card, Field, Input } from '@/components/ui'
 import { useArchiveParty, useCreateParty, useParty, useUpdateParty } from '@/app/hooks/useData'
 import { useProfile } from '@/app/hooks/useAuth'
-import { partySchema, validate, checkAmountInput } from '@/core/validation'
+import { normalizePhoneNumber, partySchema, validate, checkAmountInput } from '@/core/validation'
 import { toUserMessage } from '@/core/errors'
 import { ConfirmDialog } from '@/components/ui'
 import { ContactImportButton } from './ContactImportButton'
@@ -33,7 +33,7 @@ export function PartyFormScreen() {
   useEffect(() => {
     if (existing.data) {
       setName(existing.data.name)
-      setPhone(existing.data.phone ?? '')
+      setPhone(normalizePhoneNumber(existing.data.phone) ?? existing.data.phone ?? '')
       setAddress(existing.data.address ?? '')
       setNote(existing.data.note ?? '')
     }

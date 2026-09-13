@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { useProfile } from '@/app/hooks/useAuth'
 import { useParty, usePartyEntries, useRelationships } from '@/app/hooks/useData'
 import { computeTotals } from '@/core/balance'
+import { displayPhone, normalizePhoneNumber } from '@/core/validation'
 import { dayGroupLabel, formatDateTimeAr } from '@/core/datetime'
 import { EntryRow } from '@/features/entries/EntryRow'
 import { EntryFormSheet } from '@/features/entries/EntryFormSheet'
@@ -88,12 +89,12 @@ export function PartyDetailScreen() {
     <div className="pb-6">
       <PageHeader
         title={p.name}
-        subtitle={p.phone ?? undefined}
+        subtitle={p.phone ? displayPhone(p.phone) : undefined}
         actions={
           <>
             {p.phone ? (
               <a
-                href={`tel:${p.phone}`}
+                href={`tel:${normalizePhoneNumber(p.phone) ?? p.phone}`}
                 aria-label="اتصال"
                 className="grid h-10 w-10 place-items-center rounded-full text-ink-600 dark:text-ink-300"
               >

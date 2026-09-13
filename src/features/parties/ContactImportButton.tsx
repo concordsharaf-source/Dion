@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { ContactRound, Search } from 'lucide-react'
 import { Button, Input, Sheet, useToast } from '@/components/ui'
-import { hasContactsPicker, parseContactsFile, type ImportedContact } from '@/core/contacts'
+import { cleanPhone, hasContactsPicker, parseContactsFile, type ImportedContact } from '@/core/contacts'
+import { displayPhone } from '@/core/validation'
 
 interface NativeContact {
   name?: string[]
@@ -47,7 +48,8 @@ export function ContactImportButton({
       const first = picked?.[0]
       if (!first) return true // أُلغيت العملية
       const name = first.name?.[0]?.trim() || null
-      const phone = first.tel?.[0]?.trim() || null
+      // بلا مفتاح دولة — نحتفظ بالرقم المحلي فقط
+      const phone = cleanPhone(first.tel?.[0] ?? null)
       if (!name && !phone) {
         toast.show('جهة الاتصال لا تحتوي على اسم أو رقم', 'error')
         return true
@@ -156,7 +158,7 @@ export function ContactImportButton({
                   <span className="block truncate font-bold">{contact.name ?? 'بدون اسم'}</span>
                   {contact.phone ? (
                     <span className="block text-[0.75rem] text-ink-500" dir="ltr">
-                      {contact.phone}
+                      {displayPhone(contact.phone)}
                     </span>
                   ) : (
                     <span className="block text-[0.75rem] text-ink-400">لا يوجد رقم</span>

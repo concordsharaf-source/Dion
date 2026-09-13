@@ -6,6 +6,7 @@
 import { entryEffect } from '@/core/domain'
 import type { FinancialEntry, Party, Profile } from '@/core/domain'
 import { formatMinorForPdf } from '@/core/pdfText'
+import { displayPhone } from './validation'
 
 export type StatementPeriod = 'all' | 'month' | 'last30'
 
@@ -139,11 +140,11 @@ export function buildStatement(input: {
   return {
     title: ownerRole === 'merchant' ? 'كشف حساب عميل' : 'كشف حساب محل',
     partyName: input.party.name,
-    partyPhone: input.party.phone,
+    partyPhone: displayPhone(input.party.phone),
     partyKindLabel: input.party.kind === 'customer' ? 'عميل' : 'محل',
     ownerName: input.profile?.fullName ?? 'دفتر الديون',
     ownerRole,
-    ownerPhone: input.profile?.phone ?? null,
+    ownerPhone: displayPhone(input.profile?.phone ?? null),
     linkLabel: input.party.linkStatus === 'verified' ? 'حساب موثّق بين الطرفين' : 'دفتر شخصي',
     periodLabel: PERIOD_LABELS[input.period],
     generatedAt: now,

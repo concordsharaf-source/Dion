@@ -29,26 +29,40 @@ export function sanitizeMultiline(input: unknown, maxLength = 1000): string {
 }
 
 /**
- * توحيد رقم الهاتف — يقبل الصيغ اليمنية الشائعة:
- *   0771234567 · 771234567 · +967771234567 · 00967771234567
- * ويعيد صيغة موحّدة دولية أو null.
+ * توحيد رقم الهاتف — **بلا مفتاح دولة**.
+ * يقبل الصيغ الشائعة ويكتفي بأرقام الرقم المحلي:
+ *   0771234567 · 771234567 · +967771234567 · 00967771234567  ←  «771234567»
+ * أي مفتاح دولة يُكتب من المستخدم يُزال، ولا يُضاف أي مفتاح من التطبيق.
  */
 export function normalizePhoneNumber(input: unknown): string | null {
   if (typeof input !== 'string') return null
-  let digits = input.replace(/[^\d+]/g, '')
+  const digits = onlyDigits(input)
   if (!digits) return null
-  digits = digits.replace(/^00/, '+').replace(/^\+?967/, '')
-  digits = digits.replace(/^0+/, '')
-  if (!/^\d{6,12}$/.test(digits)) return null
-  return `+967${digits}`
+  // إزالة مفتاح الدولة إن كتبه المستخدم، ثم صفر البداية
+  const local = digits.replace(/^00/, '').replace(/^967/, '').replace(/^0+/, '')
+  if (!/^\d{6,12}$/.test(local)) return null
+  return local
 }
 
-/** عرض الرقم بصيغة مقروءة 777 123 456 */
+/** أرقام الرقم فقط (يحوّل الأرقام العربية أيضًا) */
+function onlyDigits(input: string): string {
+  return input
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/\D/g, '')
+}
+
+/**
+ * عرض الرقم بصيغة مقروءة **بلا مفتاح دولة**: 771 234 567
+ * يتعامل مع الأرقام المحفوظة قديمًا بمفتاح الدولة فيعرضها محلية أيضًا.
+ */
 export function displayPhone(phone: string | null): string {
   if (!phone) return ''
-  const d = phone.replace(/^\+967/, '')
-  if (d.length === 9) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`
-  return phone
+  const digits = onlyDigits(phone)
+  const local = digits.replace(/^00/, '').replace(/^967/, '').replace(/^0+/, '')
+  if (local.length === 9) return `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`
+  if (local.length === 7) return `${local.slice(0, 3)} ${local.slice(3)}`
+  return local || phone
 }
 
 /* ============================ مخططات ============================ */

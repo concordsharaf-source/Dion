@@ -6,6 +6,7 @@ import { Avatar, Button, Card, Chip, EmptyState, Money, Skeletons, StatusChip } 
 import { useProfile } from '@/app/hooks/useAuth'
 import { useFilteredParties } from '@/app/hooks/useData'
 import { PARTY_SORT_LABELS, type PartySort } from '@/core/balance'
+import { displayPhone } from '@/core/validation'
 
 const SORTS: PartySort[] = ['recent_activity', 'highest_debt', 'lowest_debt', 'remaining', 'fully_paid', 'name', 'newest']
 
@@ -120,7 +121,7 @@ export function PartiesScreen() {
                         {s.party.archivedAt ? <Chip>مؤرشف</Chip> : null}
                       </div>
                       <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-ink-500">
-                        {s.party.phone ? <span dir="ltr">{s.party.phone}</span> : <span>لا يوجد رقم</span>}
+                        {s.party.phone ? <span dir="ltr">{displayPhone(s.party.phone)}</span> : <span>لا يوجد رقم</span>}
                         {s.entryCount ? <span>· {s.entryCount} حركة</span> : null}
                       </p>
                     </div>

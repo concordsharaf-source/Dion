@@ -16,6 +16,7 @@ const party: Party = {
   ownerId: 'u1',
   kind: 'customer',
   name: 'أحمد محمد الشامي',
+  // رقم محفوظ قديمًا بمفتاح دولة — يجب أن يُطبع في الكشف بلا مفتاح
   phone: '+967771234567',
   address: 'صنعاء',
   note: null,
@@ -121,6 +122,9 @@ describe('كشف الحساب — النموذج', () => {
     expect(model.totals.pendingDebtMinor).toBe(750_000)
     expect(model.counts).toEqual({ confirmed: 3, pending: 1 })
     expect(model.title).toBe('كشف حساب عميل')
+    // رقم الهاتف في الكشف بلا مفتاح دولة (حتى لو كان محفوظًا قديمًا بـ+967)
+    expect(model.partyPhone).toBe('771 234 567')
+    expect(model.partyPhone).not.toContain('967')
     expect(model.rows).toHaveLength(4)
     // مرتّبة زمنيًا
     expect(model.rows[0]!.amountMinor).toBe(2_500_000)
