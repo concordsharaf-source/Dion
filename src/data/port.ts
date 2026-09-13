@@ -71,6 +71,8 @@ export interface SignUpInput {
   password: string
   fullName: string
   role: Role
+  /** رقم الهاتف (يُحفظ مع بيانات المستخدم) */
+  phone?: string | null
 }
 
 export interface SignInInput {
@@ -93,7 +95,7 @@ export interface AuthPort {
   signOut(): Promise<void>
   updateProfile(patch: Partial<Pick<Profile, 'fullName' | 'role' | 'currency' | 'theme' | 'numerals' | 'phone'>>): Promise<Profile>
   /** إنشاء الملف الشخصي بعد التسجيل (اختيار الدور) */
-  createProfile(input: { fullName: string; role: Role; currency?: string }): Promise<Profile>
+  createProfile(input: { fullName: string; role: Role; currency?: string; phone?: string | null }): Promise<Profile>
   onAuthStateChange(cb: (session: AuthSession | null) => void): () => void
   /** تغيير كلمة المرور (مستخدم مسجّل) */
   changePassword?(currentPassword: string, newPassword: string): Promise<void>
@@ -106,14 +108,34 @@ export interface AuthPort {
   listDeviceAccounts?(): Promise<DeviceAccount[]>
   /** دخول بحساب محفوظ على هذا الجهاز بلا كلمة مرور (وضع الدفتر المحلي) */
   signInAsDeviceAccount?(accountId: string): Promise<AuthSession>
+  /**
+   * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
+   * تبقى البيانات محفوظة على الجهاز، ويستطيع المستخدم الدخول بها بعد الخروج.
+   */
+  signUpDevice?(input: { fullName: string; phone: string; password: string; role: Role }): Promise<AuthSession>
+  /** دخول برقم الهاتف (أو البريد) وكلمة المرور لحساب محفوظ على هذا الجهاز */
+  signInDevice?(input: { identifier: string; password: string }): Promise<AuthSession>
+  /**
+   * استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل.
+   * (في الوضع السحابي تُستعاد عبر رابط يُرسل إلى البريد)
+   */
+  resetDevicePassword?(input: { phone: string; newPassword: string }): Promise<void>
+  /** إرسال رابط استعادة كلمة المرور إلى البريد (الوضع السحابي) */
+  resetPassword?(email: string): Promise<void>
+  /** هل يوجد حساب بهذا المعرّف على هذا الجهاز؟ (لتوجيه رسائل الاستعادة) */
+  findDeviceAccount?(identifier: string): Promise<DeviceAccount | null>
 }
 
-/** حساب محفوظ على الجهاز — للتبديل السريع بلا كلمات مرور */
+/** حساب محفوظ على الجهاز — للتبديل السريع وبلا كتابة كلمة المرور */
 export interface DeviceAccount {
   id: string
   fullName: string
   role: Role
   createdAt: string
+  /** رقم الهاتف المسجّل (يُستخدم للدخول والاستعادة) */
+  phone?: string | null
+  /** البريد الإلكتروني إن وُجد */
+  email?: string | null
 }
 
 /* ============================ الأطراف (محل / عميل) ============================ */

@@ -373,7 +373,7 @@ export class LocalDataSource implements DataSource {
       this.authListeners.forEach((cb) => cb(null))
     },
 
-    createProfile: async ({ fullName, role, currency }) => {
+    createProfile: async ({ fullName, role, currency, phone }) => {
       const session = await this.requireSession()
       const db = await getDB()
       const existing = await db.get('profiles', session.userId)
@@ -384,7 +384,7 @@ export class LocalDataSource implements DataSource {
         role,
         roles: [role],
         fullName,
-        phone: null,
+        phone: phone ?? null,
         currency: currency ?? 'YER',
         theme: 'system',
         numerals: 'latin',
@@ -457,6 +457,110 @@ export class LocalDataSource implements DataSource {
       return session
     },
 
+    /**
+     * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
+     * تُحفظ بيانات الدخول (هاتف + كلمة مرور مشفّرة) وبيانات المستخدم،
+     * فيستطيع الدخول بعد تسجيل الخروج ويرى دفتره كما تركه.
+     */
+    signUpDevice: async ({ fullName, phone, password, role }) => {
+      const db = await getDB()
+      const normalizedPhone = normalizePhoneNumber(phone)
+      if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
+
+      const users = (await db.getAll('users')) as UserRow[]
+      if (users.some((u) => u.phone === normalizedPhone)) {
+        throw appError('conflict', undefined, 'رقم الهاتف مسجّل مسبقًا على هذا الجهاز.')
+      }
+
+      const id = uuid()
+      const email = `device-${id.slice(0, 8)}@local`
+      const { hash, salt } = await hashPassword(password)
+      const user: UserRow = { id, email, passwordHash: hash, salt, phone: normalizedPhone, createdAt: nowISO() }
+      await db.put('users', user)
+
+      const profile: Profile = {
+        id,
+        role,
+        roles: [role],
+        fullName: fullName.trim(),
+        phone: normalizedPhone,
+        currency: 'YER',
+        theme: 'system',
+        numerals: 'latin',
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+      }
+      await db.put('profiles', profile as unknown as Record<string, unknown>)
+
+      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      try {
+        sessionStorage.setItem(SESSION_TAB, user.id)
+        localStorage.setItem(SESSION_LS, user.id)
+      } catch {
+        /* ignore */
+      }
+      this.authListeners.forEach((cb) => cb(session))
+      this.emit({ table: 'profile', action: 'insert', id, userId: id })
+      return session
+    },
+
+    /** دخول برقم الهاتف (أو البريد) وكلمة المرور — لحساب محفوظ على هذا الجهاز */
+    signInDevice: async ({ identifier, password }) => {
+      const db = await getDB()
+      const needle = identifier.trim().toLowerCase()
+      const phone = normalizePhoneNumber(identifier)
+      const users = (await db.getAll('users')) as UserRow[]
+      const user = users.find(
+        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
+      )
+      if (!user) throw appError('unauthorized', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      const ok = await verifyPassword(password, user.passwordHash, user.salt)
+      if (!ok) throw appError('unauthorized', undefined, 'كلمة المرور غير صحيحة.')
+
+      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      try {
+        sessionStorage.setItem(SESSION_TAB, user.id)
+        localStorage.setItem(SESSION_LS, user.id)
+      } catch {
+        /* ignore */
+      }
+      this.authListeners.forEach((cb) => cb(session))
+      return session
+    },
+
+    /** استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل */
+    resetDevicePassword: async ({ phone, newPassword }) => {
+      const normalizedPhone = normalizePhoneNumber(phone)
+      if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
+      const db = await getDB()
+      const users = (await db.getAll('users')) as UserRow[]
+      const user = users.find((u) => u.phone === normalizedPhone)
+      if (!user) throw appError('not_found', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      const { hash, salt } = await hashPassword(newPassword)
+      await db.put('users', { ...user, passwordHash: hash, salt })
+    },
+
+    /** بحث سريع عن حساب على هذا الجهاز (لتوجيه رسائل الاستعادة) */
+    findDeviceAccount: async (identifier: string) => {
+      const db = await getDB()
+      const needle = identifier.trim().toLowerCase()
+      const phone = normalizePhoneNumber(identifier)
+      const users = (await db.getAll('users')) as UserRow[]
+      const user = users.find(
+        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
+      )
+      if (!user) return null
+      const profile = (await db.get('profiles', user.id)) as unknown as Profile | undefined
+      return {
+        id: user.id,
+        fullName: profile?.fullName ?? '',
+        role: profile?.role ?? 'customer',
+        createdAt: user.createdAt,
+        phone: user.phone ?? null,
+        email: user.email,
+      }
+    },
+
     /** قائمة الحسابات المحفوظة على هذا الجهاز — لإتاحة الدخول بعد الخروج */
     listDeviceAccounts: async () => {
       const db = await getDB()
@@ -466,6 +570,8 @@ export class LocalDataSource implements DataSource {
         fullName: p.fullName,
         role: p.role,
         createdAt: p.createdAt,
+        phone: p.phone ?? null,
+        email: null as string | null,
       }))
       accounts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       return accounts

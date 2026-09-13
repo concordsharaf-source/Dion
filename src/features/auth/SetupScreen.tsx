@@ -1,15 +1,20 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Store, User } from 'lucide-react'
 import { Button, Card, Field, Input, useToast } from '@/components/ui'
 import { useAuth } from '@/app/hooks/useAuth'
 import { CURRENCIES, DEFAULT_CURRENCY } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
+import { normalizePhoneNumber, signUpDeviceSchema, validate } from '@/core/validation'
 import type { Role } from '@/core/domain'
 import { useDataSourceKind } from '@/app/DataSourceProvider'
 import { consumePendingRoute } from '@/app/pendingRoute'
 
-/** إتمام الإعداد: الاسم والدور (والعملة) — خطوة واحدة فقط */
+/**
+ * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور وتأكيدها.
+ * النوع (عميل/تاجر) يأتي من شاشة البداية — لا تُعاد أزرار النوع هنا.
+ * تُحفظ بيانات الدخول وبيانات المستخدم، فيعود إليها بعد تسجيل الخروج.
+ */
 export function SetupScreen() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -17,31 +22,42 @@ export function SetupScreen() {
   const kind = useDataSourceKind()
   const auth = useAuth()
 
-  const initialRole = (params.get('role') as Role | null) ?? 'customer'
-  const [role, setRole] = useState<Role>(initialRole)
+  const role = ((params.get('role') as Role | null) ?? 'customer') as Role
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   async function submit() {
-    if (name.trim().length < 2) {
-      setError('أدخل الاسم')
+    const result = validate(signUpDeviceSchema, {
+      fullName: name,
+      phone,
+      password,
+      confirmPassword: confirm,
+    })
+    if (!result.success) {
+      setErrors(result.errors)
       return
     }
-    setError('')
+    const data = result.data!
+    setErrors({})
     setBusy(true)
     try {
+      const normalized = normalizePhoneNumber(data.phone) ?? data.phone
       if (kind === 'local') {
-        await auth.quickStart({ fullName: name.trim(), role })
+        await auth.signUpOnDevice({ fullName: data.fullName, phone: normalized, password: data.password, role })
         await auth.updateProfile({ currency })
+        toast.show('تم إنشاء الحساب — دفترك جاهز')
       } else {
-        await auth.createProfile({ fullName: name.trim(), role, currency })
+        await auth.createProfile({ fullName: data.fullName, role, currency, phone: normalized })
+        toast.show('تم إنشاء الدفتر بنجاح')
       }
-      toast.show('تم إنشاء الدفتر بنجاح')
       navigate(consumePendingRoute(), { replace: true })
     } catch (e) {
-      setError(toUserMessage(e))
+      setErrors({ _: toUserMessage(e) })
     } finally {
       setBusy(false)
     }
@@ -50,13 +66,16 @@ export function SetupScreen() {
   return (
     <div className="flex min-h-[100dvh] flex-col px-5 pt-safe">
       <div className="py-6 text-center">
-        <h1 className="text-xl font-extrabold">مرحبًا بك في دفترك</h1>
-        <p className="mt-1 text-[0.8125rem] text-ink-500">خطوة واحدة وتبدأ التسجيل</p>
+        <h1 className="text-xl font-extrabold">إنشاء حساب جديد</h1>
+        <p className="mt-1 flex items-center justify-center gap-2 text-[0.8125rem] text-ink-500">
+          {role === 'merchant' ? <Store size={15} /> : <User size={15} />}
+          الحساب: {role === 'merchant' ? 'تاجر' : 'عميل'}
+        </p>
       </div>
 
       <div className="space-y-4">
         <Card className="space-y-4">
-          <Field label="الاسم" required error={error || undefined} htmlFor="fullname">
+          <Field label="الاسم" required error={errors.fullName} htmlFor="fullname">
             <Input
               id="fullname"
               autoFocus
@@ -68,32 +87,51 @@ export function SetupScreen() {
             />
           </Field>
 
-          <Field label="نوع الحساب">
-            <div className="grid grid-cols-2 gap-3" role="radiogroup">
-              {(
-                [
-                  { value: 'customer', label: 'عميل', icon: User },
-                  { value: 'merchant', label: 'تاجر', icon: Store },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={role === opt.value}
-                  onClick={() => setRole(opt.value)}
-                  className={
-                    'flex items-center justify-center gap-2 rounded-2xl border-2 py-3 text-sm font-extrabold transition ' +
-                    (role === opt.value
-                      ? 'border-brand-600 bg-brand-50 text-brand-800 dark:bg-brand-900/30 dark:text-brand-200'
-                      : 'border-ink-200 text-ink-600 dark:border-ink-800 dark:text-ink-300')
-                  }
-                >
-                  <opt.icon size={18} />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+          <Field
+            label="رقم الهاتف"
+            required
+            error={errors.phone}
+            hint="يُستخدم لتسجيل الدخول واستعادة كلمة المرور"
+            htmlFor="phone"
+          >
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              dir="ltr"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="777 123 456"
+              autoComplete="tel"
+            />
+          </Field>
+
+          <Field
+            label="كلمة المرور"
+            required
+            error={errors.password}
+            hint="8 أحرف على الأقل وتتضمن رقمًا"
+            htmlFor="password"
+          >
+            <Input
+              id="password"
+              type="password"
+              dir="ltr"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+
+          <Field label="تأكيد كلمة المرور" required error={errors.confirmPassword} htmlFor="confirm">
+            <Input
+              id="confirm"
+              type="password"
+              dir="ltr"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+            />
           </Field>
 
           <Field label="العملة" hint="يمكن تغييرها لاحقًا من الإعدادات">
@@ -105,20 +143,28 @@ export function SetupScreen() {
               ))}
             </select>
           </Field>
+
+          {errors._ ? <p className="text-[0.8125rem] font-bold text-danger-600">{errors._}</p> : null}
         </Card>
 
         <p className="px-1 text-[0.75rem] leading-5 text-ink-500">
           {kind === 'local'
-            ? 'يُحفظ الدفتر على هذا الجهاز. لا تحتاج بريدًا إلكترونيًا ولا إنترنت، ولا ربطًا بأي طرف آخر.'
+            ? 'يُحفظ حسابك ودفترك على هذا الجهاز. لا تحتاج بريدًا إلكترونيًا ولا إنترنت، وتستطيع الدخول مرة أخرى بنفس الرقم وكلمة المرور.'
             : 'سيُنشأ ملفك الشخصي في حسابك السحابي وتبدأ التسجيل فورًا.'}
         </p>
       </div>
 
-      <div className="mt-auto space-y-3 pb-8 pt-6">
+      <div className="mt-auto space-y-2 pb-8 pt-6">
         <Button block size="lg" loading={busy} onClick={submit}>
           ابدأ الآن
         </Button>
-        <Button variant="ghost" block onClick={() => navigate(-1)} disabled={busy}>
+        <Link
+          to="/forgot"
+          className="block py-2 text-center text-[0.8125rem] font-bold text-brand-600 underline"
+        >
+          هل نسيت كلمة المرور؟
+        </Link>
+        <Button variant="ghost" block onClick={() => navigate('/welcome')} disabled={busy}>
           رجوع
         </Button>
       </div>

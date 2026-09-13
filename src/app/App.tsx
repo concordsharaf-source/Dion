@@ -11,6 +11,7 @@ import { AppShell } from './layout/AppShell'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { SetupScreen } from '@/features/auth/SetupScreen'
 import { SignInScreen, SignUpScreen } from '@/features/auth/SignInScreen'
+import { ForgotPasswordScreen } from '@/features/auth/ForgotPasswordScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { PartiesScreen } from '@/features/parties/PartiesScreen'
 import { PartyFormScreen } from '@/features/parties/PartyFormScreen'
@@ -178,6 +179,7 @@ const router = createHashRouter([
   { path: '/signin', element: <SignInScreen /> },
   { path: '/signup', element: <SignUpScreen /> },
   { path: '/setup', element: <SetupScreen /> },
+  { path: '/forgot', element: <ForgotPasswordScreen /> },
 
   {
     element: <RequireSession />,

@@ -21,6 +21,8 @@ export const DB_VERSION = 1
 export const DB_OPEN_TIMEOUT_MS = 2_500
 
 export interface UserRow {
+  /** رقم الهاتف المسجّل على الجهاز (للدخول والاستعادة) */
+  phone?: string | null
   id: string
   email: string
   passwordHash: string

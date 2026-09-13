@@ -45,17 +45,20 @@ export function PatternPad({
     setDone(false)
   }, [done])
 
-  // إعادة التهيئة عند كل تغيّر في الحالة (خطأ ⇒ ابدأ من جديد)
+  // إعادة التهيئة عند تغيّر الحالة (خطأ/نجاح ⇒ ابدأ من جديد)
   useEffect(() => {
-    if (status === 'error' || status === 'ok') reset()
+    reset()
   }, [status, reset])
 
   const toggle = (index: number) => {
-    if (disabled || done) return
+    if (disabled) return
+    // إن كان الباترن السابق مكتملًا: النقرة تبدأ باترنًا جديدًا من هذه النقطة
     setPattern((current) => {
+      if (done) return [index]
       if (current.includes(index)) return current.filter((n) => n !== index)
       return [...current, index]
     })
+    if (done) setDone(false)
   }
 
   const finish = () => {
@@ -64,6 +67,10 @@ export function PatternPad({
     if (pattern.length >= minLength) {
       setDone(true)
       onComplete(pattern)
+      // نُفرّغ اللوحة فورًا حتى تبدأ خطوة التأكيد من جديد (كانت تعلق على الباترن الأول)
+      setPattern([])
+      setPointer(null)
+      setDone(false)
       return
     }
     setPointer(null)
@@ -114,7 +121,7 @@ export function PatternPad({
         aria-label="لوحة الباترن"
         className="relative mx-auto aspect-square w-full max-w-[17rem] touch-none"
         onPointerDown={(event) => {
-          if (disabled || done) return
+          if (disabled) return
           startFresh()
           setDragging(true)
           const rect = padRef.current?.getBoundingClientRect()
@@ -196,7 +203,7 @@ export function PatternPad({
       <div className="mt-3 flex items-center justify-center gap-2 text-[0.75rem] font-semibold text-ink-500">
         <span>
           {pattern.length === 0
-            ? 'اسحب إصبعك على النقاط أو انقرها'
+            ? 'اسحب إصبعك على النقاط أو انقرها ثم «تأكيد الباترن»'
             : `${pattern.length} نقاط${pattern.length < minLength ? ` — ${minLength - pattern.length} على الأقل` : ''}`}
         </span>
         {pattern.length > 0 ? (
@@ -209,7 +216,7 @@ export function PatternPad({
       <button
         type="button"
         onClick={finish}
-        disabled={disabled || done || pattern.length < minLength}
+        disabled={disabled || pattern.length < minLength}
         className="btn btn-primary mt-3 h-11 w-full text-[0.9375rem] font-extrabold disabled:opacity-50"
       >
         تأكيد الباترن

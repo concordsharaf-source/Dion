@@ -196,6 +196,66 @@ export const signInSchema = z.object({
   password: z.string().min(1, { message: 'أدخل كلمة المرور' }),
 })
 
+/** الهاتف مطلوب (إنشاء حساب) — يُقبل بالصيغ اليمنية الشائعة */
+const requiredPhoneField = z
+  .unknown()
+  .transform((v) => (typeof v === 'string' ? v.trim() : ''))
+  .refine((v) => normalizePhoneNumber(v) !== null, { message: 'رقم الهاتف غير صحيح — مثال: 777123456' })
+
+/** كلمة المرور مرتين — للتأكد من عدم الخطأ في الكتابة */
+const confirmPassword = z
+  .string()
+  .min(1, { message: 'أعد كتابة كلمة المرور' })
+
+export const signUpDeviceSchema = z
+  .object({
+    fullName: z
+      .unknown()
+      .transform((v) => sanitizeText(v, 60))
+      .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
+    phone: requiredPhoneField,
+    password: passwordSchema,
+    confirmPassword,
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: 'كلمتا المرور غير متطابقتين',
+    path: ['confirmPassword'],
+  })
+
+export const signUpCloudSchema = z
+  .object({
+    fullName: z
+      .unknown()
+      .transform((v) => sanitizeText(v, 60))
+      .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
+    email: emailSchema,
+    phone: requiredPhoneField,
+    password: passwordSchema,
+    confirmPassword,
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: 'كلمتا المرور غير متطابقتين',
+    path: ['confirmPassword'],
+  })
+
+/** الدخول على الجهاز: رقم الهاتف (أو البريد) + كلمة المرور */
+export const deviceSignInSchema = z.object({
+  identifier: z.string().trim().min(1, { message: 'أدخل رقم الهاتف' }),
+  password: z.string().min(1, { message: 'أدخل كلمة المرور' }),
+})
+
+/** استعادة كلمة المرور على الجهاز: التحقق من رقم الهاتف ثم تعيين كلمة جديدة */
+export const resetDevicePasswordSchema = z
+  .object({
+    phone: requiredPhoneField,
+    password: passwordSchema,
+    confirmPassword,
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: 'كلمتا المرور غير متطابقتين',
+    path: ['confirmPassword'],
+  })
+
 /* --- رمز الربط --- */
 export const linkCodeSchema = z
   .unknown()

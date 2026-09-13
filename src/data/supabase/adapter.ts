@@ -458,7 +458,7 @@ export class SupabaseDataSource implements DataSource {
         email: input.email,
         password: input.password,
         options: {
-          data: { full_name: input.fullName, role: input.role },
+          data: { full_name: input.fullName, role: input.role, phone: input.phone ?? null },
           emailRedirectTo: `${window.location.origin}/#/`,
         },
       })
@@ -491,11 +491,14 @@ export class SupabaseDataSource implements DataSource {
       this.stopRealtime()
     },
 
-    createProfile: async ({ fullName, role, currency }) => {
+    createProfile: async ({ fullName, role, currency, phone }) => {
       const uid = await this.requireUserId()
       const { data, error } = await this.client
         .from('profiles')
-        .upsert({ id: uid, full_name: fullName, role, currency: currency ?? 'YER' }, { onConflict: 'id' })
+        .upsert(
+          { id: uid, full_name: fullName, role, currency: currency ?? 'YER', phone: phone ?? null },
+          { onConflict: 'id' },
+        )
         .select('*')
         .single()
       if (error) mapError(error)
@@ -525,6 +528,14 @@ export class SupabaseDataSource implements DataSource {
     onAuthStateChange: (cb) => {
       this.authListeners.add(cb)
       return () => this.authListeners.delete(cb)
+    },
+
+    /** إرسال رابط استعادة كلمة المرور إلى البريد (Supabase Auth) */
+    resetPassword: async (email: string) => {
+      const { error } = await this.client.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/#/welcome`,
+      })
+      if (error) mapError(error)
     },
 
     changePassword: async (currentPassword, newPassword) => {
