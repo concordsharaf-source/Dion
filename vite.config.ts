@@ -16,7 +16,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // لا نحقن سكربت تسجيل: نسجّل الـ SW بأنفسنا في src/app/pwa.ts (فحص تحديث + إعادة تحميل)
+      injectRegister: null,
       strategies: 'generateSW',
       includeAssets: [
         'favicon.svg',
@@ -53,9 +54,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2,png,svg,ico,webmanifest}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ['**/*.{js,css,woff2,png,svg,ico,webmanifest}'],
+        // HTML لا يُخزَّن مسبقًا أبدًا: يُخدَم من الشبكة (NetworkFirst أدناه)
+        // ⇒ أول تحديث للصفحة يُظهر دائمًا أحدث نسخة من التطبيق
+        globIgnores: ['**/index.html'],
+        // لا مسار احتياطي مخزَّن للـ HTML: التنقّل يمرّ عبر قاعدة NetworkFirst أدناه
+        navigateFallback: null,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
@@ -114,6 +118,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     allowedHosts: true,
+    headers: { 'Cache-Control': 'no-store' },
   },
   build: {
     target: 'es2022',
