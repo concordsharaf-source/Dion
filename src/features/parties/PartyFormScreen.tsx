@@ -7,6 +7,7 @@ import { useProfile } from '@/app/hooks/useAuth'
 import { partySchema, validate, checkAmountInput } from '@/core/validation'
 import { toUserMessage } from '@/core/errors'
 import { ConfirmDialog } from '@/components/ui'
+import { ContactImportButton } from './ContactImportButton'
 
 /** إضافة / تعديل طرف (محل أو عميل) */
 export function PartyFormScreen() {
@@ -98,14 +99,25 @@ export function PartyFormScreen() {
           </Field>
 
           <Field label="رقم الهاتف" error={errors.phone} hint="اختياري — يسهّل البحث" htmlFor="pphone">
-            <Input
-              id="pphone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              inputMode="tel"
-              dir="ltr"
-              placeholder="77 123 4567"
-            />
+            <div className="space-y-2">
+              <Input
+                id="pphone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                inputMode="tel"
+                dir="ltr"
+                placeholder="77 123 4567"
+              />
+              <ContactImportButton
+                disabled={busy}
+                onPick={(contact) => {
+                  // الاسم يُملأ إن كان الحقل فارغًا، والرقم دائمًا
+                  if (contact.name && !name.trim()) setName(contact.name)
+                  if (contact.phone) setPhone(contact.phone)
+                  setErrors((prev) => ({ ...prev, phone: '' }))
+                }}
+              />
+            </div>
           </Field>
 
           <Field label="العنوان" hint="اختياري" htmlFor="paddress">
