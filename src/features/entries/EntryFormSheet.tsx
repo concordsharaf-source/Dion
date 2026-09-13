@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, Delete, Search, X } from 'lucide-react'
 import clsx from 'clsx'
-import { Button, Field, Input, Money, Sheet, useToast } from '@/components/ui'
+import { Button, Field, Input, Money, Sheet, Skeletons, useToast } from '@/components/ui'
 import { useCreateEntry, useFilteredParties } from '@/app/hooks/useData'
 import { useProfile } from '@/app/hooks/useAuth'
 import { sanitizeMultiline, sanitizeText } from '@/core/validation'
@@ -12,12 +12,18 @@ import type { EntryType, Party } from '@/core/domain'
 
 /**
  * نافذة تسجيل عملية مالية — **نافذة مستقلة لكل نوع**:
- *   · زر «تسجيل دين»   يفتح نافذة الدين وحدها
- *   · زر «تسجيل سداد» يفتح نافذة السداد وحدها
+ *   · زر «دين»   يفتح نافذة الدين وحدها
+ *   · زر «سداد» يفتح نافذة السداد وحدها
  *
- * عند الفتح تُعرض خانة المبلغ و**لوحة الأرقام** فورًا (بلا تمرير وبلا خطوات وسيطة)،
- * والمؤشر على المبلغ مباشرة. اختيار الطرف يظهر كصف صغير علوي يُفتح عند الحاجة فقط،
- * فلا يزاحم لوحة الأرقام أبدًا.
+ * خطوات التسجيل (بلا خطوات زائدة):
+ *   1) قائمة الأطراف تظهر أولًا (عملاء التاجر / محلات العميل) — إن كان هناك أكثر من طرف.
+ *   2) بعد الاختيار تُفتح خانة المبلغ + التفاصيل ولوحة الأرقام، والمؤشر على المبلغ.
+ *
+ * استثناء مقصود: إن كان هناك **طرف واحد فقط** (محل واحد عند العميل، أو عميل واحد
+ * عند التاجر) أو كان الطرف محدَّدًا مسبقًا (فتح النافذة من صفحة الطرف) ⇒ ندخل
+ * إلى المبلغ مباشرة بلا قائمة.
+ *
+ * بلا عنوان في رأس النافذة وبلا شرح في الأسفل — لتوفير مساحة الشاشة للوحة الأرقام.
  */
 
 /** إضافات سريعة بالوحدات الكبرى (تُحوّل لوحدات صغرى داخلية) */
@@ -47,8 +53,10 @@ export function EntryFormSheet({
   const cur = getCurrency(currency)
 
   const [partyId, setPartyId] = useState(defaultPartyId ?? '')
-  /** لوحة الأرقام هي الوضع الافتراضي دائمًا — قائمة الأطراف تُفتح عند الطلب فقط */
-  const [mode, setMode] = useState<'amount' | 'pick'>('amount')
+  /** loading: ننتظر الأطراف · pick: قائمة الأطراف · amount: المبلغ */
+  const [mode, setMode] = useState<'loading' | 'pick' | 'amount'>(defaultPartyId ? 'amount' : 'loading')
+  /** هل حُسمت الخطوة الأولى (لمنع إعادة الحسم مع كل تحديث للبيانات)؟ */
+  const decidedRef = useRef(false)
   const [search, setSearch] = useState('')
   const [raw, setRaw] = useState('')
   const [details, setDetails] = useState('')
@@ -62,8 +70,9 @@ export function EntryFormSheet({
   /* ----- إعادة الضبط + التركيز على المبلغ عند كل فتح ----- */
   useEffect(() => {
     if (!open) return
+    decidedRef.current = Boolean(defaultPartyId)
     setPartyId(defaultPartyId ?? '')
-    setMode('amount')
+    setMode(defaultPartyId ? 'amount' : 'loading')
     setSearch('')
     setRaw('')
     setDetails('')
@@ -75,6 +84,30 @@ export function EntryFormSheet({
     const timer = window.setTimeout(() => amountRef.current?.focus(), 240)
     return () => window.clearTimeout(timer)
   }, [open, defaultPartyId, type])
+
+  /* ----- حسم الخطوة الأولى: قائمة الأطراف أم المبلغ مباشرة ----- */
+  useEffect(() => {
+    if (!open || decidedRef.current) return
+    if (partiesQuery.isLoading) return
+    const list = partiesQuery.all
+    decidedRef.current = true
+    // طرف واحد فقط ⇒ لا داعي لقائمة (كحالة العميل مع محل واحد)
+    if (list.length === 1) {
+      setPartyId(list[0]!.party.id)
+      setMode('amount')
+      return
+    }
+    setMode('pick')
+  }, [open, partiesQuery.isLoading, partiesQuery.all])
+
+  // بعد حسم الطرف الواحد: التركيز على المبلغ
+  useEffect(() => {
+    if (open && mode === 'amount' && partyId) {
+      const timer = window.setTimeout(() => amountRef.current?.focus(), 200)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [open, mode, partyId])
 
   const all = partiesQuery.all
   const filtered = useMemo(() => {
@@ -220,23 +253,32 @@ export function EntryFormSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={isDebt ? 'تسجيل دين' : 'تسجيل سداد'}
       size="tall"
+      compact
       footer={mode === 'amount' ? sheetFooter : undefined}
       contentRef={scrollRef}
     >
-      {mode === 'pick' ? (
+      {mode === 'loading' ? (
+        <div className="space-y-3 pb-2 pt-2">
+          <p className="text-center text-[0.8125rem] font-bold text-ink-500">
+            {isCustomer ? 'جارٍ تحضير محلاتك…' : 'جارٍ تحضير عملائك…'}
+          </p>
+          <Skeletons count={4} height={56} />
+        </div>
+      ) : mode === 'pick' ? (
         /* ---------- اختيار الطرف (يُفتح عند الطلب فقط) ---------- */
         <div className="space-y-3 pb-2">
           <div className="flex items-center justify-between">
             <p className="font-extrabold">{`اختر ${partyLabel}`}</p>
-            <button
-              type="button"
-              onClick={() => setMode('amount')}
-              className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-[0.8125rem] font-bold text-brand-600"
-            >
-              <ChevronLeft size={16} className="rotate-180" /> رجوع إلى المبلغ
-            </button>
+            {partyId ? (
+              <button
+                type="button"
+                onClick={() => setMode('amount')}
+                className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-[0.8125rem] font-bold text-brand-600"
+              >
+                <ChevronLeft size={16} className="rotate-180" /> رجوع إلى المبلغ
+              </button>
+            ) : null}
           </div>
 
           <div className="relative">
@@ -318,7 +360,13 @@ export function EntryFormSheet({
                   {selected?.name ?? `اختر ${partyLabel}`}
                 </span>
                 <span className="block truncate text-[0.6875rem] text-ink-500">
-                  {selected ? (isLinked ? 'حساب موثّق · بتأكيد الطرف الآخر' : 'دفتر شخصي') : 'اضغط للاختيار'}
+                  {selected
+                    ? isLinked
+                      ? 'بتأكيد الطرف الآخر'
+                      : isDebt
+                        ? 'دين لصالحه — يُحتسب مباشرة'
+                        : 'سداد له — يُحتسب مباشرة'
+                    : 'اضغط للاختيار'}
                 </span>
               </span>
             </span>
@@ -435,11 +483,11 @@ export function EntryFormSheet({
             </button>
           )}
 
-          <p className="rounded-2xl bg-ink-200/50 p-3 text-[0.75rem] leading-5 text-ink-600 dark:bg-ink-900 dark:text-ink-300">
-            {isLinked
-              ? 'حساب موثّق: تُسجَّل العملية مباشرة لكنها لا تُحتسب في الرصيد حتى يؤكّدها الطرف الآخر.'
-              : 'دفتر شخصي: تُسجَّل العملية وتُحتسب مباشرة. لا تحتاج موافقة أي طرف.'}
-          </p>
+          {isLinked ? (
+            <p className="rounded-2xl bg-brand-50 p-3 text-[0.75rem] leading-5 text-brand-800 dark:bg-brand-900/25 dark:text-brand-200">
+              حساب موثّق: تُسجَّل العملية مباشرة، لكنها لا تُحتسب في الرصيد حتى يؤكّدها الطرف الآخر.
+            </p>
+          ) : null}
         </div>
       )}
     </Sheet>

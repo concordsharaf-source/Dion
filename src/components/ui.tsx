@@ -258,6 +258,7 @@ export function Sheet({
   footer,
   size = 'auto',
   contentRef,
+  compact = false,
 }: {
   open: boolean
   onClose: () => void
@@ -267,6 +268,8 @@ export function Sheet({
   size?: 'auto' | 'tall'
   /** مرجع لمنطقة المحتوى القابلة للتمرير (لإرجاع التمرير للأعلى عند الفتح) */
   contentRef?: React.RefObject<HTMLDivElement | null>
+  /** هيدر مختصر بلا عنوان — يوفّر مساحة الشاشة عند عدم الحاجة لعنوان */
+  compact?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -306,13 +309,22 @@ export function Sheet({
         )}
         style={{ animation: 'sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
-        <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-5">
-          <div className="mx-auto absolute inset-x-0 top-2 h-1 w-10 rounded-full bg-ink-300 dark:bg-ink-700" />
-          <h3 className="text-base font-extrabold">{title}</h3>
-          <IconButton label="إغلاق" onClick={onClose}>
-            <X size={20} />
-          </IconButton>
-        </div>
+        {compact ? (
+          <div className="relative flex items-center justify-end px-3 pb-1 pt-4">
+            <div className="mx-auto absolute inset-x-0 top-2 h-1 w-10 rounded-full bg-ink-300 dark:bg-ink-700" />
+            <IconButton label="إغلاق" onClick={onClose}>
+              <X size={20} />
+            </IconButton>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-5">
+            <div className="mx-auto absolute inset-x-0 top-2 h-1 w-10 rounded-full bg-ink-300 dark:bg-ink-700" />
+            <h3 className="text-base font-extrabold">{title}</h3>
+            <IconButton label="إغلاق" onClick={onClose}>
+              <X size={20} />
+            </IconButton>
+          </div>
+        )}
         <div ref={contentRef} className="flex-1 overflow-y-auto px-5 pb-4">
           {children}
         </div>

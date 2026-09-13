@@ -92,13 +92,23 @@ describe('التطبيق — مسار العميل المستقل', () => {
 })
 
 describe('نافذتا الدين والسداد', () => {
-  it('كل نافذة مستقلة، وتُفتح على خانة المبلغ مع لوحة أرقام', async () => {
+  it('كل نافذة مستقلة، وتُفتح على خانة المبلغ مع لوحة أرقام (طرف واحد)', async () => {
     const user = await startBook('تاجر', 'متجر الفرقان')
+
+    // عميل واحد فقط ⇒ لا قائمة، ندخل للمبلغ مباشرة
+    await user.click(await screen.findByRole('link', { name: 'العملاء' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('button', { name: 'إضافة عميل' }, { timeout: 5000 }))
+    await user.type(await screen.findByLabelText(/^الاسم/), 'خالد')
+    await user.click(screen.getByRole('button', { name: 'إضافة عميل' }))
+    await screen.findByRole('heading', { name: 'خالد' }, { timeout: 5000 })
+    await user.click(await screen.findByRole('link', { name: 'الرئيسية' }, { timeout: 5000 }))
 
     // نافذة الدين
     await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
     expect(await screen.findByRole('button', { name: 'تسجيل الدين' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'تسجيل السداد' })).not.toBeInTheDocument()
+    // بلا عنوان في الرأس وبلا شرح في الأسفل
+    expect(screen.queryByText(/^دفتر شخصي/)).not.toBeInTheDocument()
 
     // تُفتح مباشرة على خانة المبلغ
     const amount = screen.getByLabelText('المبلغ')
@@ -168,7 +178,7 @@ describe('التطبيق — مسار التاجر المستقل', () => {
 })
 
 describe('فتح نافذة الدين/السداد من الرئيسية', () => {
-  it('يفتح على خانة المبلغ مع لوحة الأرقام فورًا، والطرف يُختار من صف صغير', async () => {
+  it('الطرف الوحيد يُختار تلقائيًا وتظهر لوحة الأرقام فورًا', async () => {
     const user = await startBook('تاجر', 'متجر السلام')
 
     // ننشئ عميلًا أولًا
@@ -191,11 +201,12 @@ describe('فتح نافذة الدين/السداد من الرئيسية', () =
     await keypad(user, '15000')
     expect(amount).toHaveValue('15,000')
 
-    // لا تسجيل قبل اختيار الطرف
-    expect(screen.getByRole('button', { name: 'تسجيل الدين' })).toBeDisabled()
+    // الطرف الوحيد مختار تلقائيًا في الصف الأعلى
+    expect(screen.getByRole('button', { name: 'الطرف: خالد' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'تسجيل الدين' })).toBeEnabled()
 
-    // الاختيار من الصف الصغير أعلى النافذة
-    await user.click(screen.getByRole('button', { name: /اختر العميل/ }))
+    // ويمكن تغييره من الصف الأعلى (تفتح القائمة ثم نرجع للمبلغ)
+    await user.click(screen.getByRole('button', { name: /الطرف: خالد/ }))
     await user.click(await screen.findByRole('button', { name: /خالد/ }))
 
     // المبلغ محفوظ، والمؤشر عاد إلى خانة المبلغ
@@ -244,5 +255,81 @@ describe('النسخة الاحتياطية', () => {
     // أدوات الاستعادة والتنزيل متاحة
     expect(screen.getByRole('button', { name: /تنزيل النسخة كملف/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /استعادة من ملف نسخة/ })).toBeInTheDocument()
+  })
+})
+
+describe('آلية التسجيل الجديدة: الطرف أولًا ثم المبلغ', () => {
+  /** يضيف طرفًا من قسم الأطراف ويعود إلى الرئيسية */
+  async function addParty(user: ReturnType<typeof userEvent.setup>, role: 'تاجر' | 'عميل', name: string) {
+    const navLabel = role === 'تاجر' ? 'العملاء' : 'الديون'
+    const addLabel = role === 'تاجر' ? 'إضافة عميل' : 'إضافة محل'
+    await user.click(await screen.findByRole('link', { name: navLabel }, { timeout: 5000 }))
+    // الزر العائم «إضافة … جديد» يفتح نموذج الطرف في كل الحالات
+    const openForm = await screen.findByRole('button', { name: `${addLabel} جديد` }, { timeout: 5000 })
+    await user.click(openForm)
+    await user.type(await screen.findByLabelText(/^الاسم/), name)
+    await user.click(screen.getByRole('button', { name: addLabel }))
+    await screen.findByRole('heading', { name }, { timeout: 5000 })
+    await user.click(await screen.findByRole('link', { name: 'الرئيسية' }, { timeout: 5000 }))
+  }
+
+  it('التاجر مع أكثر من عميل: قائمة العملاء تظهر أولًا ثم نافذة المبلغ', async () => {
+    const user = await startBook('تاجر', 'متجر الأمانة')
+    await addParty(user, 'تاجر', 'أحمد')
+    await addParty(user, 'تاجر', 'سعيد')
+
+    await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
+
+    // الخطوة الأولى: قائمة العملاء — بلا لوحة أرقام بعد
+    expect(await screen.findByText('اختر العميل', undefined, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.getByLabelText('بحث العميل')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /أحمد/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /سعيد/ })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'لوحة الأرقام' })).not.toBeInTheDocument()
+
+    // الخطوة الثانية: بعد الاختيار تفتح نافذة المبلغ
+    await user.click(screen.getByRole('button', { name: /سعيد/ }))
+    expect(await screen.findByRole('group', { name: 'لوحة الأرقام' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'الطرف: سعيد' })).toBeInTheDocument()
+
+    const amount = screen.getByLabelText('المبلغ')
+    await waitFor(() => expect(document.activeElement).toBe(amount), { timeout: 3000 })
+    await keypad(user, '7000')
+    await user.click(screen.getByRole('button', { name: 'تسجيل الدين' }))
+
+    expect(await screen.findByText('تم تسجيل الدين في دفترك', undefined, { timeout: 5000 })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByLabelText('المبلغ')).not.toBeInTheDocument(), { timeout: 5000 })
+  })
+
+  it('العميل مع أكثر من محل: قائمة المحلات تظهر أولًا', async () => {
+    const user = await startBook('عميل', 'أحمد الشامي')
+    await addParty(user, 'عميل', 'بقالة النور')
+    await addParty(user, 'عميل', 'مخزن السلام')
+
+    await user.click(await screen.findByRole('button', { name: 'تسجيل سداد' }, { timeout: 5000 }))
+
+    expect(await screen.findByText('اختر المحل', undefined, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.getByLabelText('بحث المحل')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'لوحة الأرقام' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /بقالة النور/ }))
+    expect(await screen.findByRole('group', { name: 'لوحة الأرقام' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'الطرف: بقالة النور' })).toBeInTheDocument()
+  })
+
+  it('العميل مع محل واحد: يدخل إلى المبلغ مباشرة بلا قائمة', async () => {
+    const user = await startBook('عميل', 'سالم علي')
+    await addParty(user, 'عميل', 'بقالة النور')
+
+    await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
+
+    // بلا خطوة وسيطة: لوحة الأرقام مباشرة والطرف الوحيد مختار
+    expect(await screen.findByRole('group', { name: 'لوحة الأرقام' }, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.queryByLabelText('بحث المحل')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'الطرف: بقالة النور' })).toBeInTheDocument()
+
+    // بإدخال مبلغ يصبح التسجيل ممكنًا فورًا
+    await keypad(user, '3000')
+    expect(screen.getByRole('button', { name: 'تسجيل الدين' })).toBeEnabled()
   })
 })
