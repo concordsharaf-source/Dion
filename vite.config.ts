@@ -24,7 +24,6 @@ export default defineConfig({
         'apple-touch-icon.png',
         'fonts/*.woff2',
         'icons/*.png',
-        'offline.html',
       ],
       manifest: {
         name: 'دفتر الديون',
