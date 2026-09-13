@@ -1,32 +1,90 @@
-# React + TypeScript + Vite
+# دفتر الديون
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**دفتر بسيط لإدارة الديون والسداد** بين العملاء والتجار — تطبيق ويب تقدّمي (PWA) عربي،
+من اليمين إلى اليسار، مصمّم كتطبيق جوال (Android-like) لا كموقع ويب، وجاهز للتحويل
+لاحقًا إلى Android عبر Capacitor.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ما الذي يعمل الآن؟
 
-## React Compiler
+| القدرة | الحالة |
+|---|---|
+| استخدام فردي كامل (عميل أو تاجر) بلا إنترنت وبلا حساب | ✅ يعمل |
+| إنشاء دفتر بخطوة واحدة (اسم + دور) | ✅ |
+| محلات (عميل) / عملاء (تاجر): إضافة، تعديل، أرشفة، بحث وترتيب | ✅ |
+| تسجيل ديون وسدادات بتاريخ ووقت تلقائيين | ✅ |
+| الرصيد = مجموع الديون المؤكدة − مجموع السدادات المؤكدة | ✅ المعلّق لا يُحتسب |
+| رفض الصفر والسالب، ومنع السداد الأكبر من الرصيد المؤكد | ✅ مختبَر |
+| عكس القيود المؤكدة (لا تعديل صامت ولا حذف تاريخ مالي) | ✅ |
+| ربط الطرفين بموافقة الطرفين عبر رمز QR قصير العمر لمرة واحدة | ✅ |
+| تأكيد/رفض العمليات المشتركة (المنشئ لا يؤكّد عمليته) | ✅ |
+| اعتماد الرصيد السابق صراحةً (بلا دمج تلقائي) | ✅ |
+| مركز إشعارات + شارات في التنقّل السفلي | ✅ |
+| العمل دون اتصال + طابور مزامنة + منع الإرسال المزدوج | ✅ |
+| مزامنة لحظية بين الطرفين (Supabase Realtime) | ⏳ الكود جاهز — يحتاج مشروع Supabase حقيقيًا |
+| اختبارات | 128 اختبارًا تمر (منطق + محرّك محلي + مسار واجهة كامل) |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## التقنية
 
-## Expanding the Oxlint configuration
+React 19 · TypeScript · Vite · Tailwind 4 · React Query · React Router (hash) ·
+Zustand · Zod · IndexedDB (idb) · vite-plugin-pwa · Vitest + Testing Library
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## المعمار — Ports & Adapters
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+الواجهة لا تعرف إلا عقدًا واحدًا: `DataSource` (في `src/data/port.ts`).
+
+```
+src/core        منطق خالص: المال (وحدات صغرى)، آلة الحالات، الرصيد، التحقق، QR، التواريخ
+src/data        المحرّكات: local (IndexedDB) و supabase (Postgres + RLS + Realtime)
+src/features    شاشات المستخدم: بداية، دفتر، أطراف، عمليات، ربط، إشعارات، إعدادات
+src/app         التوجيه، المزوّدات، التنقّل السفلي، الثيم
+src/components  مكتبة الواجهة الموحّدة (أزرار، بطاقات، أوراق، حوارات، تنبيهات)
+supabase/       الهجرة SQL الكاملة: جداول + قيود + عروض + دوال مؤمّنة + RLS + Realtime
+docs/PLAN.md    الخطة الكاملة والمراحل الـ16
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+**لماذا محرّكان؟** المجرّد المحلي يعمل بلا خادم إطلاقًا (استخدام فردي فوري، بلا حساب،
+بلا إنترنت)؛ والمحرّك السحابي يضيف الربط بين الطرفين والمزامنة اللحظية. الاثنان ينفّذان
+نفس العقد ونفس القواعد المالية، لذا الواجهة والاختبارات لا تتغير.
+
+## التشغيل
+
+```bash
+npm install
+npm run dev        # تطوير على http://localhost:5173
+npm run build      # بناء إنتاجي + Service Worker + manifest
+npm run preview    # معاينة البناء
+npm run test       # 128 اختبارًا
+npm run typecheck  # فحص الأنواع
+npm run lint       # oxlint
+npm run verify     # lint + typecheck + test
+```
+
+## تفعيل الوضع السحابي (اختياري)
+
+1. أنشئ مشروعًا في Supabase ثم نفّذ `supabase/migrations/0001_init.sql` في SQL Editor.
+2. أضف متغيّرات البيئة (مفتاح `anon` فقط — لا `service_role` في المتصفح أبدًا):
+
+```
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+```
+
+3. أعد البناء. سيتحوّل التطبيق تلقائيًا إلى الوضع السحابي، وسيُحمَّل المحرّك الثقيل عند
+الحاجة فقط (code-splitting).
+
+## قواعد ثابتة لا تُخالف
+
+1. **لا يُطلب الربط أبدًا** لأجل وظيفة مستقلة — لا وجود لرسالة «يجب ربط حسابك أولًا».
+2. **المال ليس Float**: وحدات صغرى صحيحة داخليًا، و`bigint`/`numeric(18,2)` في القاعدة.
+3. **لا حذف تاريخ مالي**: التصحيح بعكس مرتبط بالأصل، والإلغاء قبل التأكيد.
+4. **لا ثقة بالاسم أو الهاتف**: التأكيد بحساب الطرف الحقيقي ووقت التأكيد.
+5. **لا أسرار في الواجهة**: مفتاح `anon` فقط + RLS صارم + كتابة مالية عبر دوال مؤمّنة.
+6. **البساطة للمستخدم والتعقيد في الخلفية**.
+
+## الخصوصية
+
+يعمل التطبيق افتراضيًا بمحرّكه المحلي: البيانات في قاعدة بيانات المتصفح (IndexedDB) على
+جهاز المستخدم فقط، بلا خادم. في الوضع السحابي، كل جدول محمي بسياسات وصول تمنع أي مستخدم
+من رؤية أو تعديل بيانات غيره.
