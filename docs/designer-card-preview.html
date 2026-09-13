@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>بطاقة «تواصل مع المصمم» — أسفل الإعدادات</title>
+    <style>
+      /* معاينة بطاقة «تواصل مع المصمم» بنفس ألوان التطبيق — بلا موارد خارجية */
+      :root {
+        --brand-100: #d6f5e4;
+        --brand-700: #0c6149;
+        --gold-100: #fbecc9;
+        --gold-700: #a64915;
+        --ink-50: #f7f8f8;
+        --ink-100: #eef0f1;
+        --ink-200: #dfe3e5;
+        --ink-400: #98a2a8;
+        --ink-500: #6f7a81;
+        --ink-600: #565f66;
+        --ink-900: #1b1f22;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 40px;
+        background: var(--ink-50);
+        font-family: 'Cairo', 'Segoe UI', 'Noto Naskh Arabic', Tahoma, sans-serif;
+        color: var(--ink-900);
+      }
+      .phone {
+        max-width: 420px;
+        margin: 0 auto 26px;
+        background: #fff;
+        border-radius: 26px;
+        padding: 18px 16px 26px;
+        box-shadow: 0 10px 30px rgba(20, 40, 30, 0.08);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--ink-100);
+        margin-bottom: 14px;
+      }
+      .bar h1 { font-size: 17px; font-weight: 800; margin: 0; }
+      .section-title {
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--ink-500);
+        margin: 0 4px 8px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--ink-100);
+      }
+      .row:last-child { border-bottom: 0; }
+      .row .label { font-weight: 700; font-size: 14px; }
+      .row .hint { font-size: 11px; color: var(--ink-500); margin-top: 2px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--ink-100);
+        border-radius: 20px;
+        padding: 16px;
+        box-shadow: 0 6px 18px rgba(20, 40, 30, 0.06);
+        margin-top: 14px;
+      }
+      .card .title { font-size: 14px; font-weight: 800; margin: 0; }
+      .card .body { font-size: 12px; line-height: 1.9; color: var(--ink-600); margin: 6px 0 0; }
+      .contact {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--ink-100);
+        border-radius: 16px;
+        padding: 12px;
+        margin-top: 8px;
+        text-decoration: none;
+        color: inherit;
+      }
+      .contact .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+      .icon.wa { background: var(--brand-100); color: var(--brand-700); }
+      .icon.mail { background: var(--gold-100); color: var(--gold-700); }
+      .contact .k { font-size: 11px; color: var(--ink-500); display: block; }
+      .contact .v { font-weight: 700; font-size: 14px; display: block; direction: ltr; text-align: right; }
+      .credit {
+        margin: 14px 0 0;
+        padding-top: 12px;
+        border-top: 1px solid var(--ink-200);
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink-500);
+      }
+      .signout {
+        margin-top: 14px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 800;
+        color: #c0392b;
+        padding: 12px;
+      }
+      .storage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 10px;
+        color: var(--ink-400);
+      }
+      .note {
+        max-width: 420px;
+        margin: 0 auto;
+        font-size: 12px;
+        color: var(--ink-500);
+        line-height: 1.9;
+      }
+      svg { display: block; }
+    </style>
+  </head>
+  <body>
+    <div class="phone">
+      <div class="bar">
+        <h1>الإعدادات</h1>
+      </div>
+
+      <p class="section-title">الحساب والبيانات</p>
+      <div class="row">
+        <span class="label">الملف الشخصي</span>
+      </div>
+      <div class="row">
+        <span class="label">الأمان</span>
+        <span class="hint">قفل التطبيق بالبصمة أو الباترن</span>
+      </div>
+      <div class="row">
+        <span class="label">النسخ الاحتياطي</span>
+      </div>
+
+      <div class="signout">تسجيل الخروج من هذا الجهاز</div>
+
+      <div class="storage">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+        </svg>
+        التخزين: IndexedDB على جهازك
+      </div>
+
+      <!-- ↓↓↓ البطاقة الجديدة أسفل الإعدادات ↓↓↓ -->
+      <div class="card">
+        <p class="title">تواصل مع المصمم</p>
+        <p class="body">نسعد باستقبال ملاحظاتكم واقتراحاتكم</p>
+        <p class="body">لتحسين تجربة استخدام حسابي وتطويرها باستمرار.</p>
+
+        <a class="contact" href="https://wa.me/967770388100" target="_blank" rel="noreferrer">
+          <span class="icon wa">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
+            </svg>
+          </span>
+          <span>
+            <span class="k">واتساب</span>
+            <span class="v">+967770388100</span>
+          </span>
+        </a>
+
+        <a class="contact" href="mailto:concordsharaf@gmail.com">
+          <span class="icon mail">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 7-10 6L2 7" />
+            </svg>
+          </span>
+          <span>
+            <span class="k">البريد الإلكتروني</span>
+            <span class="v">concordsharaf@gmail.com</span>
+          </span>
+        </a>
+
+        <p class="credit">تصميم شرف غالب قحطان · الجمهورية اليمنية</p>
+      </div>
+    </div>
+
+    <p class="note">
+      معاينة ثابتة للبطاقة كما ستظهر في التطبيق (نفس الألوان والأبعاد). في التطبيق: زر «واتساب» يفتح محادثة واتساب
+      مباشرة، وزر البريد يفتح تطبيق البريد.
+    </p>
+  </body>
+</html>

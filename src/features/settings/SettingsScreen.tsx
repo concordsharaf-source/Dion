@@ -32,6 +32,7 @@ import { toUserMessage } from '@/core/errors'
 import { queryClient, qk } from '@/app/queryClient'
 import { playFeedback, readSoundEnabled, writeSoundEnabled } from '@/core/sound'
 import { readLockConfig } from '@/core/appLock'
+import { DesignerContactCard } from './DesignerContactCard'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -385,6 +386,9 @@ export function SettingsScreen() {
         <div className="flex items-center justify-center gap-2 pb-4 text-[0.625rem] text-ink-400">
           <HardDriveDownload size={12} /> {local ? 'التخزين: IndexedDB على جهازك' : 'التخزين: خادم آمن + نسخة محلية'}
         </div>
+
+        {/* أسفل الإعدادات: تواصل مع المصمم */}
+        <DesignerContactCard />
       </div>
 
       {/* اختيار العملة */}
