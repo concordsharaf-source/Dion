@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Link2, Pencil, Phone, Plus, TrendingUp } from 'lucide-react'
+import { FileText, Link2, Pencil, Phone, Plus, TrendingUp } from 'lucide-react'
 import { Button, Card, Chip, EmptyState, Money, SectionTitle, Skeletons } from '@/components/ui'
 import { PageHeader } from '@/components/PageHeader'
 import { useProfile } from '@/app/hooks/useAuth'
@@ -10,6 +10,7 @@ import { dayGroupLabel, formatDateTimeAr } from '@/core/datetime'
 import { EntryRow } from '@/features/entries/EntryRow'
 import { EntryFormSheet } from '@/features/entries/EntryFormSheet'
 import { EntryDetailSheet } from '@/features/entries/EntryDetailSheet'
+import { StatementExportSheet } from '@/features/statement/StatementExportSheet'
 import type { EntryType, FinancialEntry } from '@/core/domain'
 
 export function PartyDetailScreen() {
@@ -22,6 +23,7 @@ export function PartyDetailScreen() {
 
   const [openType, setOpenType] = useState<EntryType | null>(null)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
 
   const viewerId = profile.data?.id ?? ''
   const currency = profile.data?.currency ?? 'YER'
@@ -100,6 +102,14 @@ export function PartyDetailScreen() {
             ) : null}
             <button
               type="button"
+              onClick={() => setExportOpen(true)}
+              aria-label="تصدير كشف PDF"
+              className="grid h-10 w-10 place-items-center rounded-full text-ink-600 dark:text-ink-300"
+            >
+              <FileText size={18} />
+            </button>
+            <button
+              type="button"
               onClick={() => navigate(`/parties/${p.id}/edit`)}
               aria-label="تعديل"
               className="grid h-10 w-10 place-items-center rounded-full text-ink-600 dark:text-ink-300"
@@ -156,6 +166,10 @@ export function PartyDetailScreen() {
             </p>
           ) : null}
         </Card>
+
+        <Button block variant="soft" icon={<FileText size={17} />} onClick={() => setExportOpen(true)}>
+          تصدير كشف حساب PDF
+        </Button>
 
         <div className="grid grid-cols-2 gap-3">
           <Button size="lg" icon={<Plus size={18} />} onClick={() => setOpenType('debt')}>
@@ -269,6 +283,7 @@ export function PartyDetailScreen() {
         onClose={() => setOpenEntryId(null)}
         partyName={p.name}
       />
+      <StatementExportSheet open={exportOpen} onClose={() => setExportOpen(false)} party={p} />
     </div>
   )
 }

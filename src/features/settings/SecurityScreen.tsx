@@ -8,6 +8,7 @@ import { validate, passwordSchema } from '@/core/validation'
 import { toUserMessage } from '@/core/errors'
 import { formatDateTimeAr } from '@/core/datetime'
 import { useNavigate } from 'react-router-dom'
+import { AppLockSection } from './AppLockSection'
 
 export function SecurityScreen() {
   const ds = useDataSource()
@@ -75,6 +76,8 @@ export function SecurityScreen() {
             )}
           </div>
         </Card>
+
+        <AppLockSection userName={profile.data?.fullName ?? null} />
 
         <section>
           <SectionTitle>الجلسة الحالية</SectionTitle>

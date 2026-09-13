@@ -27,6 +27,7 @@ import { SyncScreen } from '@/features/settings/SyncScreen'
 import { PrivacyScreen } from '@/features/settings/PrivacyScreen'
 import { BackupScreen } from '@/features/settings/BackupScreen'
 import { useDailyBackupRunner } from './hooks/useBackup'
+import { AppLockGate } from '@/features/lock/AppLockGate'
 
 /* ============================ حراسة المسارات ============================ */
 
@@ -223,7 +224,9 @@ export function App() {
           <ToastProvider>
             <OfflineBanner />
             <BackupWatcher />
-            <RouterProvider router={router} />
+            <AppLockGate>
+              <RouterProvider router={router} />
+            </AppLockGate>
           </ToastProvider>
         </DataSourceProvider>
       </QueryClientProvider>

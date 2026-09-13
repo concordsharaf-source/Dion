@@ -8,6 +8,7 @@ import {
   HardDriveDownload,
   Info,
   Link2,
+  Lock,
   LogOut,
   Moon,
   Palette,
@@ -30,6 +31,7 @@ import { CURRENCIES } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
 import { queryClient, qk } from '@/app/queryClient'
 import { playFeedback, readSoundEnabled, writeSoundEnabled } from '@/core/sound'
+import { readLockConfig } from '@/core/appLock'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -45,6 +47,8 @@ export function SettingsScreen() {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [sound, setSound] = useState(() => readSoundEnabled())
+  // تُقرأ حالة القفل في كل عرض حتى تظهر مباشرة بعد تغييرها من شاشة الأمان
+  const lockConfig = readLockConfig()
   const [busy, setBusy] = useState(false)
 
   const sync = useSyncState()
@@ -152,6 +156,18 @@ export function SettingsScreen() {
               icon={<Shield size={18} />}
               label="الأمان"
               hint={local ? 'جلسة الجهاز' : 'كلمة المرور والجلسة'}
+            />
+            <RowLink
+              to="/settings/security"
+              icon={<Lock size={18} />}
+              label="قفل التطبيق"
+              hint={
+                lockConfig.mode === 'off'
+                  ? 'غير مفعّل — فعّله بالبصمة أو الباترن'
+                  : lockConfig.mode === 'biometric'
+                    ? 'مفعّل بالبصمة'
+                    : 'مفعّل بالباترن'
+              }
             />
             <RowLink
               to="/settings/sync"
