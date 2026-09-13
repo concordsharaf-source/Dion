@@ -126,7 +126,7 @@ export function ForgotPasswordScreen() {
                 label="كلمة المرور الجديدة"
                 required
                 error={errors.password}
-                hint="8 أحرف على الأقل وتتضمن رقمًا"
+                hint="4 خانات على الأقل — أرقام أو حروف كما تريد"
                 htmlFor="forgot-password"
               >
                 <Input

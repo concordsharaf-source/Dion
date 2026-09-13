@@ -131,6 +131,30 @@ describe('حساب المستخدم على هذا الجهاز', () => {
     expect(screen.getByText('تسجيل الدخول')).toBeInTheDocument()
   })
 
+  it('يقبل كلمة مرور من 4 أرقام وحدها (بلا حروف أو رموز)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await openAccountForm(user, 'عميل')
+    await fillAccount(user, 'علي صالح', '777999888', '1234')
+    await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
+    await screen.findByText('إجمالي المتبقي عليك', undefined, { timeout: 5000 })
+
+    await signOut(user)
+    await signInWithPassword(user, '777999888', '1234')
+    expect(await screen.findByText('إجمالي المتبقي عليك', undefined, { timeout: 5000 })).toBeInTheDocument()
+  })
+
+  it('يرفض كلمة مرور أقل من 4 خانات', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await openAccountForm(user, 'عميل')
+    await fillAccount(user, 'علي صالح', '777999888', '123')
+    await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
+
+    expect(await screen.findByText('كلمة المرور 4 خانات على الأقل')).toBeInTheDocument()
+    expect(screen.getByText('إنشاء حساب جديد')).toBeInTheDocument()
+  })
+
   it('«هل نسيت كلمة المرور» يعيّن كلمة جديدة ويمكن الدخول بها', async () => {
     const user = userEvent.setup()
     render(<App />)

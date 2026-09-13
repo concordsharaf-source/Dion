@@ -117,7 +117,7 @@ export function SecurityScreen() {
                   onChange={(e) => setCurrent(e.target.value)}
                 />
               </Field>
-              <Field label="كلمة المرور الجديدة" required error={errors.next} htmlFor="new-pass" hint="8 أحرف على الأقل وتتضمن رقمًا">
+              <Field label="كلمة المرور الجديدة" required error={errors.next} htmlFor="new-pass" hint="4 خانات على الأقل — أرقام أو حروف كما تريد">
                 <Input
                   id="new-pass"
                   type="password"

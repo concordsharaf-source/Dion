@@ -110,7 +110,7 @@ export function SetupScreen() {
             label="كلمة المرور"
             required
             error={errors.password}
-            hint="8 أحرف على الأقل وتتضمن رقمًا"
+            hint="4 خانات على الأقل — أرقام أو حروف كما تريد"
             htmlFor="password"
           >
             <Input

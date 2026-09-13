@@ -174,12 +174,14 @@ export const emailSchema = z
   .toLowerCase()
   .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v), { message: 'البريد الإلكتروني غير صحيح' })
 
+/**
+ * كلمة المرور: **4 خانات وما فوق، ولا شيء غير ذلك**.
+ * لا تُفرض حروف ولا رموز ولا حالات خاصة — الأرقام وحدها مقبولة (مثل 1234).
+ */
 export const passwordSchema = z
   .string()
-  .min(8, { message: 'كلمة المرور 8 أحرف على الأقل' })
+  .min(4, { message: 'كلمة المرور 4 خانات على الأقل' })
   .max(72, { message: 'كلمة المرور طويلة جدًا' })
-  .refine((v) => /[A-Za-z\u0600-\u06FF]/.test(v), { message: 'أضف حرفًا واحدًا على الأقل' })
-  .refine((v) => /\d/.test(v), { message: 'أضف رقمًا واحدًا على الأقل' })
 
 export const signUpSchema = z.object({
   email: emailSchema,

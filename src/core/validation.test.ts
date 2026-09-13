@@ -98,16 +98,16 @@ describe('التحقق من المبالغ', () => {
 })
 
 describe('كلمة المرور', () => {
-  it('تتطلب 8 أحرف ورقمًا', () => {
-    expect(passwordSchema.safeParse('12345678').success).toBe(false)
-    expect(passwordSchema.safeParse('abcdefgh').success).toBe(false)
-    expect(passwordSchema.safeParse('abc12345').success).toBe(true)
-    expect(passwordSchema.safeParse('كلمةمرور1').success).toBe(true)
+  it('تقبل الأرقام وحدها بلا فرض حروف أو رموز', () => {
+    expect(passwordSchema.safeParse('1234').success).toBe(true)
+    expect(passwordSchema.safeParse('12345678').success).toBe(true)
+    expect(passwordSchema.safeParse('abcd').success).toBe(true)
+    expect(passwordSchema.safeParse('123456').success).toBe(true)
   })
 
-  it('ترفض القصيرة جدًا', () => {
-    const r = passwordSchema.safeParse('ab1')
+  it('ترفض الأقل من 4 خانات', () => {
+    const r = passwordSchema.safeParse('123')
     expect(r.success).toBe(false)
-    if (!r.success) expect(r.error.issues[0].message).toBe('كلمة المرور 8 أحرف على الأقل')
+    if (!r.success) expect(r.error.issues[0].message).toBe('كلمة المرور 4 خانات على الأقل')
   })
 })
