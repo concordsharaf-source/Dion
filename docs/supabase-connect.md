@@ -72,14 +72,21 @@
 أو مغلق تمامًا (كما في التطبيقات المثبّتة). على Android/Chrome يعمل مباشرة، وعلى iPhone يشترط
 «إضافة إلى الشاشة الرئيسية» (iOS 16.4+).
 
-### مفاتيح VAPID (جاهزة — وُلِّدت لمشروعك)
-```
-VAPID_PUBLIC_KEY=BPbddHmjbgRMOUVoQ6z7cE3olOo4bKYxBXxj_UsoepYHJ4_7gp6CunDbT1z8eQaNRSGsjXt-6ZO70D4DYyqRnHo
-VAPID_PRIVATE_KEY=a5_M3W5coUyzeYaXAVsZQDlyvlLkoZ_5tv4RmQsO7Js
-```
-- **العام** ← `VITE_VAPID_PUBLIC_KEY` في `.env.local` (وفي استضافتك).
-- **الخاص** ← سرّ في Supabase: `supabase secrets set VAPID_PRIVATE_KEY=… VAPID_PUBLIC_KEY=… VAPID_SUBJECT=mailto:concordsharaf@gmail.com`
-- لا يُكتب الخاص في المستودع. (وإن أردت مفاتيح خاصة بك: `npx web-push generate-vapid-keys` واستبدلها.)
+### مفاتيح VAPID (تُضبط مرة واحدة)
+- **العام** ← `VITE_VAPID_PUBLIC_KEY` في `.env.local` (وفي استضافتك):
+  `BIQ-Xe9ivmpVy6eftxhHyHYroqO33tI1q5aFYaQefnrN7WNHAQcgg7POuDSMaAr5EnKGZigLvy_ft-lwQ7dCEIg`
+- **الخاص** ← سرّ في Supabase فقط (لا يُكتب هنا ولا في المستودع):
+  ```bash
+  supabase secrets set VAPID_PRIVATE_KEY=<المفتاح الخاص> VAPID_PUBLIC_KEY=… VAPID_SUBJECT=mailto:concordsharaf@gmail.com
+  ```
+  أو ولّد زوجًا خاصًا بك بأمر واحد ولا يخرج من جهازك:
+  ```bash
+  npx web-push generate-vapid-keys
+  ```
+  (إن ولّدت زوجًا جديدًا: ضع العام في `VITE_VAPID_PUBLIC_KEY` والخاص في أسرار الدالة، وبذلك يُلغى أي مفتاح سابق.)
+
+> 🔐 ملاحظة أمنية: المفتاح الخاص يكفي لإرسال إشعارات لمشتركيك، فهو سرّ. لذلك لا يُكتب في المستودع —
+> يُحفظ في أسرار Edge Functions فقط. (أي مفتاح خاص يُكتب في ملف داخل المشروع يجب اعتباره مكشوفًا ويُستبدل.)
 
 ### ما نُفِّذ في التطبيق (جاهز الآن)
 1. `src/core/push.ts` + `src/services/push.ts`: الدعم، الإذن، الاشتراك والإلغاء، تحويل مفاتيح VAPID.
