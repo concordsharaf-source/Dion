@@ -32,7 +32,7 @@ export function EntryRow({
       : 'bg-danger-100 text-danger-600 dark:bg-danger-500/20 dark:text-danger-100'
 
   const title = isReversal
-    ? 'قيد عكسي'
+    ? 'قيد تصحيحي (سجل قديم)'
     : entry.entryKind === 'opening'
       ? 'رصيد افتتاحي'
       : isPayment

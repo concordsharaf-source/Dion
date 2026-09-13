@@ -16,6 +16,8 @@ import {
   Smartphone,
   Trash2,
   UserCog,
+  Volume2,
+  VolumeOff,
   WifiOff,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -27,6 +29,7 @@ import { useTheme, type ThemeMode } from '@/app/theme'
 import { CURRENCIES } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
 import { queryClient, qk } from '@/app/queryClient'
+import { playFeedback, readSoundEnabled, writeSoundEnabled } from '@/core/sound'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -41,6 +44,7 @@ export function SettingsScreen() {
   const [currencyOpen, setCurrencyOpen] = currencySheet
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const [sound, setSound] = useState(() => readSoundEnabled())
   const [busy, setBusy] = useState(false)
 
   const sync = useSyncState()
@@ -52,6 +56,21 @@ export function SettingsScreen() {
   const p = profile.data
   if (!p) return <div className="skeleton m-4 h-40" />
 
+  /** تشغيل/كتم صوت إتمام العمليات — مع سماع النغمة فورًا عند التفعيل */
+  function toggleSound() {
+    const next = !sound
+    setSound(next)
+    if (next) {
+      writeSoundEnabled(true)
+      playFeedback('success')
+      toast.show('تم تفعيل صوت إتمام العمليات')
+    } else {
+      playFeedback('pending')
+      writeSoundEnabled(false)
+      toast.show('تم كتم الأصوات', 'info')
+    }
+  }
+
   async function changeCurrency(code: string) {
     setCurrencyOpen(false)
     try {
@@ -59,43 +78,6 @@ export function SettingsScreen() {
       toast.show(`تم تغيير العملة إلى ${CURRENCIES[code]?.name ?? code}`)
     } catch (e) {
       toast.show(toUserMessage(e), 'error')
-    }
-  }
-
-  async function exportBackup() {
-    setBusy(true)
-    try {
-      const [parties, entries, notifications, relationships, requests] = await Promise.all([
-        ds.parties.list({ includeArchived: true, limit: 2000 }),
-        ds.entries.list({ status: 'all', limit: 5000 }),
-        ds.notifications.list({ limit: 1000 }),
-        ds.links.listRelationships(),
-        ds.links.listRequests(),
-      ])
-      const payload = {
-        app: 'دفتر الديون',
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        engine: ds.kind,
-        profile: p,
-        parties: parties.items,
-        entries: entries.items,
-        relationships,
-        linkRequests: requests,
-        notifications: notifications.items,
-      }
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `daftar-backup-${new Date().toISOString().slice(0, 10)}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast.show('تم تنزيل نسخة احتياطية من دفترك')
-    } catch (e) {
-      toast.show(toUserMessage(e), 'error')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -256,6 +238,28 @@ export function SettingsScreen() {
                 تبديل
               </button>
             </div>
+
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300">
+                {sound ? <Volume2 size={18} /> : <VolumeOff size={18} />}
+              </span>
+              <span className="flex-1">
+                <span className="block font-bold">صوت إتمام العملية</span>
+                <span className="block text-[0.6875rem] text-ink-500">
+                  {sound ? 'نغمة قصيرة عند اكتمال كل عملية' : 'مكتوم'}
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={sound}
+                aria-label="صوت إتمام العملية"
+                onClick={toggleSound}
+                className={clsx('relative h-7 w-12 shrink-0 rounded-full transition', sound ? 'bg-brand-600' : 'bg-ink-300 dark:bg-ink-700')}
+              >
+                <span className={clsx('absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all', sound ? 'start-1' : 'start-6')} />
+              </button>
+            </div>
           </Card>
         </section>
 
@@ -291,20 +295,18 @@ export function SettingsScreen() {
         <section>
           <SectionTitle>البيانات</SectionTitle>
           <Card className="divide-y divide-ink-200/70 p-0 dark:divide-ink-800/70">
-            <button
-              type="button"
-              onClick={() => void exportBackup()}
-              disabled={busy}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-start"
-            >
+            <Link to="/settings/backup" className="flex items-center gap-3 px-4 py-3.5 text-start" aria-label="النسخة الاحتياطية">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300">
                 <Download size={18} />
               </span>
               <span className="flex-1">
-                <span className="block font-bold">تنزيل نسخة احتياطية</span>
-                <span className="block text-[0.6875rem] text-ink-500">ملف JSON يحتوي كل السجلات والعمليات</span>
+                <span className="block font-bold">النسخة الاحتياطية</span>
+                <span className="block text-[0.6875rem] text-ink-500">
+                  نسخة واحدة دائمًا{p.role === 'merchant' ? ' — تلقائيًا كل نهاية يوم' : ''}
+                </span>
               </span>
-            </button>
+              <ChevronLeft size={18} className="text-ink-400" />
+            </Link>
             <Link
               to="/settings/privacy"
               className="flex items-center gap-3 px-4 py-3.5 text-start"

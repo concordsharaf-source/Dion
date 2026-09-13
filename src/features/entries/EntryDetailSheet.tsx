@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, RotateCcw, Trash2, X } from 'lucide-react'
+import { Check, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Money, Sheet, StatusChip, useToast } from '@/components/ui'
 import { useEntry, useEntryActions } from '@/app/hooks/useData'
 import { useProfile } from '@/app/hooks/useAuth'
@@ -10,7 +10,7 @@ import { sanitizeMultiline } from '@/core/validation'
 
 /**
  * تفاصيل عملية + الإجراءات المسموح بها حسب الحالة والصلاحية
- * (تأكيد · رفض بسبب · إلغاء · عكس قيد مؤكد)
+ * (تأكيد · رفض بسبب · إلغاء) — لا «عكس عملية»: التصحيح بتسجيل العملية المعاكسة
  */
 export function EntryDetailSheet({
   entryId,
@@ -28,7 +28,7 @@ export function EntryDetailSheet({
   const actions = useEntryActions()
   const toast = useToast()
 
-  const [dialog, setDialog] = useState<'confirm' | 'reject' | 'cancel' | 'reverse' | null>(null)
+  const [dialog, setDialog] = useState<'confirm' | 'reject' | 'cancel' | null>(null)
   const [reason, setReason] = useState('')
 
   const entry = entryQuery.data ?? null
@@ -37,9 +37,8 @@ export function EntryDetailSheet({
 
   const canConfirm = entry ? canPerform('confirm', entry, viewerId).allowed : false
   const canCancel = entry ? canPerform('cancel', entry, viewerId).allowed : false
-  const canReverse = entry ? canPerform('reverse', entry, viewerId).allowed : false
 
-  async function run(kind: 'confirm' | 'reject' | 'cancel' | 'reverse') {
+  async function run(kind: 'confirm' | 'reject' | 'cancel') {
     if (!entry) return
     try {
       if (kind === 'confirm') {
@@ -48,12 +47,9 @@ export function EntryDetailSheet({
       } else if (kind === 'reject') {
         await actions.reject.mutateAsync({ id: entry.id, reason: sanitizeMultiline(reason, 300) || null })
         toast.show('تم رفض العملية', 'info')
-      } else if (kind === 'cancel') {
+      } else {
         await actions.cancel.mutateAsync(entry.id)
         toast.show('تم إلغاء العملية', 'info')
-      } else {
-        await actions.reverse.mutateAsync({ id: entry.id, note: sanitizeMultiline(reason, 300) || null })
-        toast.show(entry.scope === 'shared' ? 'تم إنشاء قيد عكسي بانتظار تأكيد الطرف الآخر' : 'تم عكس العملية')
       }
       setDialog(null)
       setReason('')
@@ -63,8 +59,7 @@ export function EntryDetailSheet({
     }
   }
 
-  const busy =
-    actions.confirm.isPending || actions.reject.isPending || actions.cancel.isPending || actions.reverse.isPending
+  const busy = actions.confirm.isPending || actions.reject.isPending || actions.cancel.isPending
 
   return (
     <>
@@ -111,7 +106,7 @@ export function EntryDetailSheet({
                 />
               ) : null}
               {entry.reason ? <Row label="سبب الرفض" value={entry.reason} /> : null}
-              {entry.reversedByEntryId ? <Row label="حالة القيد" value="معكوسة بقيد لاحق" /> : null}
+              {entry.reversedByEntryId ? <Row label="حالة القيد" value="مصحّحة بقيد لاحق (سجل قديم)" /> : null}
               <Row label="المعرّف" value={entry.id.slice(0, 8)} />
             </dl>
 
@@ -154,18 +149,10 @@ export function EntryDetailSheet({
                 </Button>
               ) : null}
 
-              {canReverse ? (
-                <Button
-                  block
-                  variant="ghost"
-                  icon={<RotateCcw size={16} />}
-                  onClick={() => {
-                    setReason('')
-                    setDialog('reverse')
-                  }}
-                >
-                  عكس العملية (تصحيح مع حفظ السجل)
-                </Button>
+              {entry.status === 'confirmed' ? (
+                <p className="rounded-2xl bg-ink-100 p-3 text-[0.75rem] leading-5 text-ink-600 dark:bg-ink-900 dark:text-ink-300">
+                  سُجّلت خطأً؟ لا نحذف أي سجل مالي: سجّل العملية المعاكسة (سداد مقابل دين، أو دين مقابل سداد) ويتعدّل الرصيد فورًا.
+                </p>
               ) : null}
 
               {entry.status === 'pending' && entry.creatorId === viewerId ? (
@@ -179,7 +166,7 @@ export function EntryDetailSheet({
       <ConfirmDialog
         open={dialog === 'confirm'}
         title="تأكيد العملية"
-        message="بعد التأكيد تُحتسب العملية في الرصيد الموثّق لدى الطرفين، ولا يمكن تعديلها لاحقًا إلا بقيد عكسي."
+        message="بعد التأكيد تُحتسب العملية في الرصيد الموثّق لدى الطرفين. لا نحذف السجل أبدًا، ولتصحيح خطأ سجّل العملية المعاكسة."
         confirmLabel="تأكيد"
         loading={busy}
         onCancel={() => setDialog(null)}
@@ -216,23 +203,6 @@ export function EntryDetailSheet({
         onConfirm={() => void run('cancel')}
       />
 
-      <ConfirmDialog
-        open={dialog === 'reverse'}
-        title="عكس العملية"
-        message="لا نحذف أي سجل مالي. سيُنشأ قيد عكسي جديد يلغي أثر هذه العملية، ويحتاج تأكيد الطرف الآخر في الحساب الموثّق."
-        confirmLabel="إنشاء قيد عكسي"
-        loading={busy}
-        onCancel={() => setDialog(null)}
-        onConfirm={() => void run('reverse')}
-      >
-        <textarea
-          className="field min-h-20 resize-none"
-          placeholder="سبب العكس (اختياري)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          maxLength={300}
-        />
-      </ConfirmDialog>
     </>
   )
 }

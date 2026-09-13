@@ -20,6 +20,7 @@ import type {
   CreatePartyDTO,
   DataEvent,
   DataSource,
+  RestoreResult,
   EntryPort,
   EntryQuery,
   LinkPort,
@@ -53,7 +54,9 @@ import type {
 } from '@/core/domain'
 import { appError, type ErrorCode } from '@/core/errors'
 import { uuid } from '@/core/id'
+import { normalizeArabic } from '@/core/balance'
 import { tokenToCode } from '@/core/qr'
+import type { BackupPayload } from '@/core/backup'
 import { getDB, type OutboxRow } from '../local/db'
 
 type Row = Record<string, unknown>
@@ -227,8 +230,6 @@ const CODE_MAP: Record<string, ErrorCode> = {
   link_invalid: 'link_invalid',
   profile_missing: 'not_found',
   not_confirmed: 'entry_locked',
-  already_reversed: 'already_decided',
-  cannot_reverse_reversal: 'entry_locked',
   not_shared: 'validation',
   solo_not_cancellable: 'conflict',
   duplicate: 'duplicate',
@@ -683,6 +684,81 @@ export class SupabaseDataSource implements DataSource {
     },
   }
 
+  /* ============================ استعادة نسخة احتياطية ============================ */
+
+  /**
+   * الوضع السحابي: الكتابة تمرّ عبر الدوال الآمنة فقط، لذلك تُعاد الأطراف
+   * والعمليات الشخصية **كعمليات جديدة** بنفس معرّف العميل (client_ref) — فلا
+   * تتكرر ولا يُنشأ سجل مزدوج. العمليات المشتركة لا تُستعاد تلقائيًا لأنها
+   * تحتاج تأكيد الطرف الآخر الحقيقي.
+   */
+  async restore(payload: BackupPayload): Promise<RestoreResult> {
+    await this.requireUserId()
+    const profile = await this.auth.getProfile()
+    const kind: PartyKind = profile?.role === 'merchant' ? 'customer' : 'shop'
+
+    const existing = (await this.parties.list({ includeArchived: true, limit: 5000 })).items
+    const byName = new Map<string, string>()
+    for (const party of existing) byName.set(`${party.kind}:${normalizeArabic(party.name).trim().toLowerCase()}`, party.id)
+
+    const idMap = new Map<string, string>()
+    let partiesAdded = 0
+    let entriesAdded = 0
+    let skipped = 0
+
+    for (const party of payload.parties) {
+      const key = `${party.kind}:${normalizeArabic(party.name).trim().toLowerCase()}`
+      const known = existing.find((p) => p.id === party.id)
+      if (known) {
+        idMap.set(party.id, known.id)
+        continue
+      }
+      const sameName = byName.get(key)
+      if (sameName) {
+        idMap.set(party.id, sameName)
+        skipped += 1
+        continue
+      }
+      const created = await this.parties.create({
+        kind,
+        name: party.name,
+        phone: party.phone,
+        address: party.address,
+        note: party.note,
+        openingAmountMinor: 0,
+      })
+      idMap.set(party.id, created.id)
+      byName.set(key, created.id)
+      partiesAdded += 1
+    }
+
+    for (const entry of payload.entries) {
+      if (entry.scope !== 'solo') {
+        skipped += 1
+        continue
+      }
+      const sourcePartyId = entry.partyId ?? entry.merchantPartyId ?? entry.customerPartyId
+      const partyId = sourcePartyId ? idMap.get(sourcePartyId) : undefined
+      if (!partyId) {
+        skipped += 1
+        continue
+      }
+      await this.entries.create({
+        partyId,
+        entryType: entry.entryType,
+        amountMinor: entry.amountMinor,
+        currency: entry.currency,
+        details: entry.details,
+        note: entry.note,
+        occurredAt: entry.occurredAt,
+        clientRef: entry.clientRef ?? entry.id,
+      })
+      entriesAdded += 1
+    }
+
+    return { parties: partiesAdded, entries: entriesAdded, skipped }
+  }
+
   /* ============================ العمليات المالية ============================ */
 
   private buildQuery(query: EntryQuery = {}, count = false) {
@@ -769,7 +845,6 @@ export class SupabaseDataSource implements DataSource {
     confirm: async (id) => this.entryAction('confirm_entry', { p_entry_id: id }, id),
     reject: async (id, reason) => this.entryAction('reject_entry', { p_entry_id: id, p_reason: reason ?? null }, id),
     cancel: async (id) => this.entryAction('cancel_entry', { p_entry_id: id }, id),
-    reverse: async (id, note) => this.entryAction('reverse_entry', { p_entry_id: id, p_note: note ?? null }, id),
 
     countAwaitingMe: async () => {
       const uid = await this.requireUserId()

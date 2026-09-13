@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Check, Delete, Search, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, Delete, Search, X } from 'lucide-react'
 import clsx from 'clsx'
 import { Button, Field, Input, Money, Sheet, useToast } from '@/components/ui'
 import { useCreateEntry, useFilteredParties } from '@/app/hooks/useData'
@@ -11,12 +11,13 @@ import { uuid } from '@/core/id'
 import type { EntryType, Party } from '@/core/domain'
 
 /**
- * نافذة تسجيل عملية مالية — مستقلة لكل نوع:
- *   · «تسجيل دين»   (نافذة الدين)
- *   · «تسجيل سداد» (نافذة السداد)
+ * نافذة تسجيل عملية مالية — **نافذة مستقلة لكل نوع**:
+ *   · زر «تسجيل دين»   يفتح نافذة الدين وحدها
+ *   · زر «تسجيل سداد» يفتح نافذة السداد وحدها
  *
- * تُفتح مباشرة على خانة المبلغ مع لوحة أرقام داخلية لإدخال سريع بلا تعقيد،
- * وتعمل بلوحة المفاتيح أيضًا (أرقام · Backspace · Enter).
+ * عند الفتح تُعرض خانة المبلغ و**لوحة الأرقام** فورًا (بلا تمرير وبلا خطوات وسيطة)،
+ * والمؤشر على المبلغ مباشرة. اختيار الطرف يظهر كصف صغير علوي يُفتح عند الحاجة فقط،
+ * فلا يزاحم لوحة الأرقام أبدًا.
  */
 
 /** إضافات سريعة بالوحدات الكبرى (تُحوّل لوحدات صغرى داخلية) */
@@ -46,7 +47,8 @@ export function EntryFormSheet({
   const cur = getCurrency(currency)
 
   const [partyId, setPartyId] = useState(defaultPartyId ?? '')
-  const [picking, setPicking] = useState(!defaultPartyId)
+  /** لوحة الأرقام هي الوضع الافتراضي دائمًا — قائمة الأطراف تُفتح عند الطلب فقط */
+  const [mode, setMode] = useState<'amount' | 'pick'>('amount')
   const [search, setSearch] = useState('')
   const [raw, setRaw] = useState('')
   const [details, setDetails] = useState('')
@@ -55,19 +57,22 @@ export function EntryFormSheet({
   const [error, setError] = useState('')
 
   const amountRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  /* ----- إعادة الضبط والتركيز على المبلغ عند الفتح ----- */
+  /* ----- إعادة الضبط + التركيز على المبلغ عند كل فتح ----- */
   useEffect(() => {
     if (!open) return
     setPartyId(defaultPartyId ?? '')
-    setPicking(!defaultPartyId)
+    setMode('amount')
     setSearch('')
     setRaw('')
     setDetails('')
     setNote('')
     setShowMore(false)
     setError('')
-    const timer = window.setTimeout(() => amountRef.current?.focus(), 260)
+    // نُبقي بداية النافذة أعلى الشاشة حتى تكون خانة المبلغ ولوحة الأرقام ظاهرتين
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+    const timer = window.setTimeout(() => amountRef.current?.focus(), 240)
     return () => window.clearTimeout(timer)
   }, [open, defaultPartyId, type])
 
@@ -75,8 +80,8 @@ export function EntryFormSheet({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const list = all.map((s) => s.party)
-    if (!q) return list.slice(0, 60)
-    return list.filter((p) => p.name.toLowerCase().includes(q) || (p.phone ?? '').includes(q)).slice(0, 60)
+    if (!q) return list.slice(0, 80)
+    return list.filter((p) => p.name.toLowerCase().includes(q) || (p.phone ?? '').includes(q)).slice(0, 80)
   }, [all, search])
 
   const selected: Party | null = useMemo(() => all.find((s) => s.party.id === partyId)?.party ?? null, [all, partyId])
@@ -86,12 +91,11 @@ export function EntryFormSheet({
   const isCustomer = profile.data?.role === 'customer'
   const partyLabel = isCustomer ? 'المحل' : 'العميل'
 
-  /* ----- المبلغ: قراءة مباشرة من نص الإدخال ----- */
+  /* ----- المبلغ ----- */
   const parsed = raw === '' ? null : readAmount(raw)
   const minor = parsed && parsed.ok ? parsed.minor : 0
   const display = minor > 0 ? new Intl.NumberFormat('en-US', { maximumFractionDigits: cur.decimals }).format(minor / 100) : '0'
 
-  // المتبقي القابل للسداد (من الملخّصات المحسوبة)
   const remaining = summary?.remaining ?? 0
   const overPayment = !isDebt && minor > 0 && minor > remaining
 
@@ -108,7 +112,6 @@ export function EntryFormSheet({
           if (cur.decimals === 0 || prev.includes('.')) return prev
           return prev === '' ? '0.' : prev + '.'
         }
-        // خانات عشرية بحد العملة
         if (prev.includes('.') && prev.split('.')[1]!.length >= cur.decimals) return prev
         if (prev.replace(/[^\d]/g, '').length >= 12) return prev
         if (prev === '0') return key === '0' || key === '00' ? prev : key
@@ -118,23 +121,20 @@ export function EntryFormSheet({
     [cur.decimals],
   )
 
-  const addAmount = useCallback(
-    (increment: number) => {
-      setError('')
-      setRaw((prev) => {
-        const base = readAmount(prev)
-        const current = base.ok ? base.minor : 0
-        const next = current + increment
-        if (next <= 0) return ''
-        return String(next / 100)
-      })
-    },
-    [],
-  )
+  const addAmount = useCallback((increment: number) => {
+    setError('')
+    setRaw((prev) => {
+      const base = readAmount(prev)
+      const current = base.ok ? base.minor : 0
+      const next = current + increment
+      if (next <= 0) return ''
+      return String(next / 100)
+    })
+  }, [])
 
-  /* ----- لوحة المفاتيح الخارجية (سطح المكتب) ----- */
+  /* ----- لوحة المفاتيح على سطح المكتب ----- */
   useEffect(() => {
-    if (!open) return
+    if (!open || mode !== 'amount') return
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (/^[0-9]$/.test(e.key)) {
@@ -150,13 +150,13 @@ export function EntryFormSheet({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, press])
+  }, [open, mode, press])
 
   async function submit() {
     setError('')
     if (!partyId) {
-      setError(`اختر ${partyLabel}`)
-      setPicking(true)
+      setError(`اختر ${partyLabel} أولًا`)
+      setMode('pick')
       return
     }
     if (!(minor > 0)) {
@@ -195,6 +195,26 @@ export function EntryFormSheet({
   }
 
   const Icon = isDebt ? ArrowDownLeft : ArrowUpRight
+  const sheetFooter = (
+    <div className="space-y-2">
+      {error ? (
+        <p className="text-center text-[0.8125rem] font-bold text-danger-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <Button
+        block
+        size="lg"
+        variant={isDebt ? 'danger' : 'primary'}
+        loading={createEntry.isPending}
+        disabled={!canSubmit}
+        icon={<Check size={18} />}
+        onClick={submit}
+      >
+        {isDebt ? 'تسجيل الدين' : 'تسجيل السداد'}
+      </Button>
+    </div>
+  )
 
   return (
     <Sheet
@@ -202,90 +222,88 @@ export function EntryFormSheet({
       onClose={onClose}
       title={isDebt ? 'تسجيل دين' : 'تسجيل سداد'}
       size="tall"
-      footer={
-        <div className="space-y-2">
-          {error ? (
-            <p className="text-center text-[0.8125rem] font-bold text-danger-600" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button
-            block
-            size="lg"
-            variant={isDebt ? 'danger' : 'primary'}
-            loading={createEntry.isPending}
-            disabled={!canSubmit}
-            icon={<Check size={18} />}
-            onClick={submit}
-          >
-            {isDebt ? 'تسجيل الدين' : 'تسجيل السداد'}
-          </Button>
-        </div>
-      }
+      footer={mode === 'amount' ? sheetFooter : undefined}
+      contentRef={scrollRef}
     >
-      <div className="space-y-3 pb-2">
-        {/* ---------- الطرف ---------- */}
-        {picking ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[0.8125rem] font-bold">{`اختر ${partyLabel}`}</p>
-              {selected ? (
-                <button type="button" className="text-[0.75rem] font-bold text-brand-600" onClick={() => setPicking(false)}>
-                  إغلاق
-                </button>
-              ) : null}
-            </div>
-            {all.length > 6 ? (
-              <div className="relative">
-                <Search size={18} className="absolute end-3 top-1/2 -translate-y-1/2 text-ink-400" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`ابحث عن ${partyLabel}...`}
-                  className="pe-10"
-                  aria-label={`بحث ${partyLabel}`}
-                />
-              </div>
-            ) : null}
-            <div className="max-h-[28dvh] space-y-2 overflow-y-auto pe-1">
-              {filtered.length === 0 ? (
-                <p className="py-3 text-center text-[0.8125rem] text-ink-500">
-                  لا يوجد {partyLabel}. أضفه أولًا من قسم {isCustomer ? 'المحلات' : 'العملاء'}.
-                </p>
-              ) : (
-                filtered.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setPartyId(p.id)
-                      setPicking(false)
-                      amountRef.current?.focus()
-                    }}
-                    aria-pressed={p.id === partyId}
-                    className={clsx(
-                      'flex w-full items-center justify-between gap-2 rounded-2xl border-2 px-3 py-2.5 text-start transition',
-                      p.id === partyId
-                        ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30'
-                        : 'border-transparent bg-white dark:bg-ink-900',
-                    )}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-bold">{p.name}</span>
-                      {p.phone ? (
-                        <span className="block text-[0.6875rem] text-ink-500" dir="ltr">
-                          {p.phone}
-                        </span>
-                      ) : null}
-                    </span>
-                    {p.linkStatus === 'verified' ? <span className="chip bg-brand-100 text-brand-800">موثّق</span> : null}
-                  </button>
-                ))
-              )}
-            </div>
+      {mode === 'pick' ? (
+        /* ---------- اختيار الطرف (يُفتح عند الطلب فقط) ---------- */
+        <div className="space-y-3 pb-2">
+          <div className="flex items-center justify-between">
+            <p className="font-extrabold">{`اختر ${partyLabel}`}</p>
+            <button
+              type="button"
+              onClick={() => setMode('amount')}
+              className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-[0.8125rem] font-bold text-brand-600"
+            >
+              <ChevronLeft size={16} className="rotate-180" /> رجوع إلى المبلغ
+            </button>
           </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2 rounded-2xl bg-white p-3 dark:bg-ink-900">
+
+          <div className="relative">
+            <Search size={18} className="absolute end-3 top-1/2 -translate-y-1/2 text-ink-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`ابحث عن ${partyLabel}...`}
+              className="pe-10"
+              aria-label={`بحث ${partyLabel}`}
+            />
+          </div>
+
+          <div className="space-y-2">
+            {filtered.length === 0 ? (
+              <p className="py-6 text-center text-[0.8125rem] leading-6 text-ink-500">
+                لا يوجد {partyLabel} بعد.
+                <br />
+                أضفه من قسم {isCustomer ? 'المحلات' : 'العملاء'} ثم عُد إلى هنا.
+              </p>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setPartyId(p.id)
+                    setMode('amount')
+                    setError('')
+                    window.setTimeout(() => amountRef.current?.focus(), 60)
+                  }}
+                  aria-pressed={p.id === partyId}
+                  className={clsx(
+                    'flex w-full items-center justify-between gap-2 rounded-2xl border-2 px-3 py-3 text-start transition active:scale-[0.99]',
+                    p.id === partyId
+                      ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30'
+                      : 'border-transparent bg-white dark:bg-ink-900',
+                  )}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-bold">{p.name}</span>
+                    <span className="block text-[0.6875rem] text-ink-500">
+                      {p.phone ? <span dir="ltr">{p.phone}</span> : 'بلا رقم'}
+                    </span>
+                  </span>
+                  {p.linkStatus === 'verified' ? (
+                    <span className="chip bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200">موثّق</span>
+                  ) : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ---------- المبلغ + لوحة الأرقام: الواجهة الأولى دائمًا ---------- */
+        <div className="space-y-3 pb-2">
+          <button
+            type="button"
+            onClick={() => setMode('pick')}
+            aria-label={selected ? `الطرف: ${selected.name}` : `اختر ${partyLabel}`}
+            className={clsx(
+              'flex w-full items-center justify-between gap-2 rounded-2xl border-2 p-2.5 text-start transition active:scale-[0.99]',
+              selected
+                ? 'border-transparent bg-white dark:bg-ink-900'
+                : 'border-dashed border-danger-300 bg-danger-50/60 dark:border-danger-500/40 dark:bg-danger-500/10',
+            )}
+          >
             <span className="flex min-w-0 items-center gap-2">
               <span
                 className={clsx(
@@ -296,24 +314,19 @@ export function EntryFormSheet({
                 <Icon size={18} />
               </span>
               <span className="min-w-0">
-                <span className="block truncate font-extrabold">{selected?.name ?? '—'}</span>
-                <span className="block text-[0.6875rem] text-ink-500">
-                  {isLinked ? 'حساب موثّق · يحتاج تأكيد الطرف الآخر' : 'دفتر شخصي'}
+                <span className="block truncate text-[0.9375rem] font-extrabold">
+                  {selected?.name ?? `اختر ${partyLabel}`}
+                </span>
+                <span className="block truncate text-[0.6875rem] text-ink-500">
+                  {selected ? (isLinked ? 'حساب موثّق · بتأكيد الطرف الآخر' : 'دفتر شخصي') : 'اضغط للاختيار'}
                 </span>
               </span>
             </span>
-            <button
-              type="button"
-              onClick={() => setPicking(true)}
-              className="shrink-0 rounded-xl px-2.5 py-1.5 text-[0.75rem] font-bold text-brand-600"
-            >
-              تغيير
-            </button>
-          </div>
-        )}
+            <span className="shrink-0 rounded-xl px-2 py-1 text-[0.75rem] font-bold text-brand-600">
+              {selected ? 'تغيير' : 'اختيار'}
+            </span>
+          </button>
 
-        {/* ---------- المبلغ + لوحة الأرقام ---------- */}
-        <div className="space-y-3">
           <div
             className={clsx(
               'rounded-3xl border-2 p-4 text-center transition',
@@ -357,7 +370,6 @@ export function EntryFormSheet({
             ) : null}
           </div>
 
-          {/* إضافات سريعة */}
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
             {QUICK_ADD_UNITS.map((units) => (
               <button
@@ -371,7 +383,6 @@ export function EntryFormSheet({
             ))}
           </div>
 
-          {/* لوحة الأرقام */}
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="لوحة الأرقام">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => (
               <KeyButton key={k} onClick={() => press(k)} label={k} />
@@ -386,43 +397,51 @@ export function EntryFormSheet({
           </div>
 
           {overPayment ? (
-            <p className="rounded-2xl bg-danger-50 p-2.5 text-center text-[0.75rem] font-bold text-danger-600 dark:bg-danger-500/10" role="alert">
+            <p
+              className="rounded-2xl bg-danger-50 p-2.5 text-center text-[0.75rem] font-bold text-danger-600 dark:bg-danger-500/10"
+              role="alert"
+            >
               المبلغ أكبر من المتبقي (<Money minor={remaining} currency={currency} />)
             </p>
           ) : null}
+
+          {!partyId ? (
+            <p className="text-center text-[0.75rem] font-bold text-ink-500">
+              {`لم تختر ${partyLabel} بعد — اضغط الصف الأعلى للاختيار`}
+            </p>
+          ) : null}
+
+          {showMore ? (
+            <div className="space-y-3 pt-1">
+              <Field label="التفاصيل" hint="مثال: مواد غذائية">
+                <Input value={details} onChange={(e) => setDetails(e.target.value)} maxLength={160} />
+              </Field>
+              <Field label="ملاحظة" hint="اختياري">
+                <textarea
+                  className="field min-h-20 resize-none"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={500}
+                />
+              </Field>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowMore(true)}
+              className="w-full rounded-2xl bg-ink-200/50 py-2.5 text-[0.8125rem] font-bold text-ink-600 dark:bg-ink-900 dark:text-ink-300"
+            >
+              + تفاصيل وملاحظة (اختياري)
+            </button>
+          )}
+
+          <p className="rounded-2xl bg-ink-200/50 p-3 text-[0.75rem] leading-5 text-ink-600 dark:bg-ink-900 dark:text-ink-300">
+            {isLinked
+              ? 'حساب موثّق: تُسجَّل العملية مباشرة لكنها لا تُحتسب في الرصيد حتى يؤكّدها الطرف الآخر.'
+              : 'دفتر شخصي: تُسجَّل العملية وتُحتسب مباشرة. لا تحتاج موافقة أي طرف.'}
+          </p>
         </div>
-
-        {/* ---------- تفاصيل اختيارية ---------- */}
-        {showMore ? (
-          <div className="space-y-3">
-            <Field label="التفاصيل" hint="مثال: مواد غذائية">
-              <Input value={details} onChange={(e) => setDetails(e.target.value)} maxLength={160} />
-            </Field>
-            <Field label="ملاحظة" hint="اختياري">
-              <textarea
-                className="field min-h-20 resize-none"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={500}
-              />
-            </Field>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowMore(true)}
-            className="w-full rounded-2xl bg-ink-200/50 py-2.5 text-[0.8125rem] font-bold text-ink-600 dark:bg-ink-900 dark:text-ink-300"
-          >
-            + تفاصيل وملاحظة (اختياري)
-          </button>
-        )}
-
-        <p className="rounded-2xl bg-ink-200/50 p-3 text-[0.75rem] leading-5 text-ink-600 dark:bg-ink-900 dark:text-ink-300">
-          {isLinked
-            ? 'حساب موثّق: تُسجَّل العملية مباشرة لكنها لا تُحتسب في الرصيد حتى يؤكّدها الطرف الآخر.'
-            : 'دفتر شخصي: تُسجَّل العملية وتُحتسب مباشرة. لا تحتاج موافقة أي طرف.'}
-        </p>
-      </div>
+      )}
     </Sheet>
   )
 }

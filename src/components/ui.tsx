@@ -257,6 +257,7 @@ export function Sheet({
   children,
   footer,
   size = 'auto',
+  contentRef,
 }: {
   open: boolean
   onClose: () => void
@@ -264,6 +265,8 @@ export function Sheet({
   children: ReactNode
   footer?: ReactNode
   size?: 'auto' | 'tall'
+  /** مرجع لمنطقة المحتوى القابلة للتمرير (لإرجاع التمرير للأعلى عند الفتح) */
+  contentRef?: React.RefObject<HTMLDivElement | null>
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -310,7 +313,9 @@ export function Sheet({
             <X size={20} />
           </IconButton>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-5 pb-4">
+          {children}
+        </div>
         {footer ? <div className="border-t border-ink-200 px-5 py-4 pb-safe dark:border-ink-800">{footer}</div> : null}
       </div>
     </div>

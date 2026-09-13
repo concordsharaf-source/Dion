@@ -6,6 +6,7 @@ import type { CreateEntryDTO, CreatePartyDTO, EntryQuery, PartyQuery } from '@/d
 import { uuid } from '@/core/id'
 import { filterAndSortParties, summarizeParties, type FilterOptions } from '@/core/balance'
 import { useMemo } from 'react'
+import { playFeedback, type FeedbackSound } from '@/core/sound'
 
 /* ============================ الأطراف ============================ */
 
@@ -122,12 +123,25 @@ function useInvalidateAll() {
   }
 }
 
+/** ينجز الإبطال ثم يُشغّل صوت إتمام العملية */
+function soundResult(invalidate: () => void, kind: FeedbackSound = 'success') {
+  return () => {
+    invalidate()
+    playFeedback(kind)
+  }
+}
+
+function soundError() {
+  playFeedback('error')
+}
+
 export function useCreateParty() {
   const ds = useDataSource()
   const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: (input: CreatePartyDTO) => ds.parties.create(input),
-    onSuccess: invalidate,
+    onSuccess: soundResult(invalidate),
+    onError: soundError,
   })
 }
 
@@ -136,7 +150,8 @@ export function useUpdateParty() {
   const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<CreatePartyDTO> }) => ds.parties.update(id, patch),
-    onSuccess: invalidate,
+    onSuccess: soundResult(invalidate),
+    onError: soundError,
   })
 }
 
@@ -146,7 +161,8 @@ export function useArchiveParty() {
   return useMutation({
     mutationFn: ({ id, archive }: { id: string; archive: boolean }) =>
       archive ? ds.parties.archive(id) : ds.parties.unarchive(id),
-    onSuccess: invalidate,
+    onSuccess: soundResult(invalidate),
+    onError: soundError,
   })
 }
 
@@ -156,7 +172,12 @@ export function useCreateEntry() {
   return useMutation({
     mutationFn: (input: Omit<CreateEntryDTO, 'clientRef'> & { clientRef?: string }) =>
       ds.entries.create({ ...input, clientRef: input.clientRef ?? uuid() }),
-    onSuccess: invalidate,
+    // الصوت: نغمة إتمام إن تأكّدت العملية فورًا، ونغمة «بانتظار الطرف الآخر» إن كانت مشتركة
+    onSuccess: (entry) => {
+      invalidate()
+      playFeedback(entry.status === 'confirmed' ? 'success' : 'pending')
+    },
+    onError: soundError,
   })
 }
 
@@ -164,15 +185,20 @@ export function useEntryActions() {
   const ds = useDataSource()
   const invalidate = useInvalidateAll()
   return {
-    confirm: useMutation({ mutationFn: (id: string) => ds.entries.confirm(id), onSuccess: invalidate }),
+    confirm: useMutation({
+      mutationFn: (id: string) => ds.entries.confirm(id),
+      onSuccess: soundResult(invalidate),
+      onError: soundError,
+    }),
     reject: useMutation({
       mutationFn: ({ id, reason }: { id: string; reason?: string | null }) => ds.entries.reject(id, reason),
-      onSuccess: invalidate,
+      onSuccess: soundResult(invalidate),
+      onError: soundError,
     }),
-    cancel: useMutation({ mutationFn: (id: string) => ds.entries.cancel(id), onSuccess: invalidate }),
-    reverse: useMutation({
-      mutationFn: ({ id, note }: { id: string; note?: string | null }) => ds.entries.reverse(id, note),
-      onSuccess: invalidate,
+    cancel: useMutation({
+      mutationFn: (id: string) => ds.entries.cancel(id),
+      onSuccess: soundResult(invalidate, 'pending'),
+      onError: soundError,
     }),
   }
 }

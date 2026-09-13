@@ -11,6 +11,7 @@ import { deleteDatabase } from './db'
 import { AppError } from '@/core/errors'
 import { computeTotals, summarizeParties } from '@/core/balance'
 import type { AuthSession, DataSource } from '../port'
+import { buildBackupPayload } from '@/core/backup'
 
 /* ============================ تهيئة ============================ */
 
@@ -198,26 +199,28 @@ describe('قواعد المبالغ', () => {
   })
 })
 
-/* ============================ 4) العكس والتصحيح ============================ */
+/* ============================ 4) التصحيح بعملية معاكسة ============================ */
 
-describe('العكس بدل التعديل الصامت', () => {
-  it('يعكس عملية مؤكدة بقيد جديد ويلغي أثرها', async () => {
+describe('التصحيح: عملية معاكسة بدل أي تعديل أو حذف', () => {
+  it('لا يوجد أي مسار «عكس عملية» في طبقة البيانات', async () => {
+    expect('reverse' in ds.entries).toBe(false)
+    expect('reverse' in ds.links).toBe(false)
+  })
+
+  it('تصحيح دين خاطئ بتسجيل سداد مقابل له', async () => {
     actAs(merchant)
     const party = await ds.parties.create({ kind: 'customer', name: 'أحمد' })
     const debt = await ds.entries.create({ partyId: party.id, entryType: 'debt', amountMinor: 2_000_000, currency: 'YER', clientRef: ref('d') })
+    expect(await remainingOf(party.id, merchant)).toBe(2_000_000)
 
-    const reversal = await ds.entries.reverse(debt.id, 'مبلغ خاطئ')
-    expect(reversal.entryKind).toBe('reversal')
-    expect(reversal.reversesEntryId).toBe(debt.id)
-
+    // سُجّل بالخطأ؟ نُسجّل العملية المعاكسة — لا حذف ولا تعديل صامت
+    await ds.entries.create({ partyId: party.id, entryType: 'payment', amountMinor: 2_000_000, currency: 'YER', clientRef: ref('p') })
     expect(await remainingOf(party.id, merchant)).toBe(0)
 
-    // القيد الأصلي يبقى في السجل ولا يُحذف
+    // العملية الأصلية باقية في السجل كاملًا
     const all = await ds.entries.list({ status: 'all' })
     expect(all.items.map((e) => e.id)).toContain(debt.id)
-
-    // لا عكس مزدوج لنفس العملية
-    await expect(ds.entries.reverse(debt.id)).rejects.toMatchObject({ code: 'conflict' })
+    expect(all.items).toHaveLength(2)
   })
 })
 
@@ -514,25 +517,26 @@ describe('النظام المشترك — لا تُعتمد عملية إلا ب
     expect(notifs.items.some((n) => n.kind === 'entry_cancelled')).toBe(true)
   })
 
-  it('عكس عملية مؤكدة يحتاج موافقة الطرف الآخر', async () => {
+  it('تصحيح عملية مؤكدة بعملية معاكسة ينتظر تأكيد الطرف الآخر', async () => {
     actAs(merchant)
     const debt = await ds.entries.create({ partyId: merchantPartyId, entryType: 'debt', amountMinor: 2_000_000, currency: 'YER', clientRef: ref('d4') })
     actAs(customer)
     await ds.entries.confirm(debt.id)
     expect(await remainingOf(merchantPartyId, merchant)).toBe(2_000_000)
 
-    const reversal = await ds.entries.reverse(debt.id, 'تصحيح')
-    expect(reversal.status).toBe('pending')
-    expect(await remainingOf(merchantPartyId, merchant)).toBe(2_000_000) // لا يزال مؤثرًا
+    // العميل يسجّل سدادًا مقابلًا (تصحيح خطأ) ⇒ لا يؤثر حتى يؤكّده التاجر
+    const fix = await ds.entries.create({ partyId: customerPartyId, entryType: 'payment', amountMinor: 2_000_000, currency: 'YER', clientRef: ref('f4') })
+    expect(fix.status).toBe('pending')
+    expect(await remainingOf(merchantPartyId, merchant)).toBe(2_000_000)
 
     actAs(merchant)
-    await ds.entries.confirm(reversal.id)
+    await ds.entries.confirm(fix.id)
     expect(await remainingOf(merchantPartyId, merchant)).toBe(0)
     expect(await remainingOf(customerPartyId, customer)).toBe(0)
 
-    // القيد الأصلي يبقى موثّقًا ومعلَّمًا بالعكس
-    const original = await ds.entries.get(debt.id)
-    expect(original?.reversedByEntryId).toBe(reversal.id)
+    // القيدان باقيان في السجل — لا حذف لأي أثر مالي
+    const all = await ds.entries.list({ status: 'all' })
+    expect(all.items.map((e) => e.id).sort()).toEqual([debt.id, fix.id].sort())
   })
 })
 
@@ -753,5 +757,74 @@ describe('لوحات المعلومات', () => {
     await ds.entries.create({ partyId: shop.id, entryType: 'debt', amountMinor: 7_500_000, currency: 'YER', clientRef: ref('c1') })
     const all = await ds.entries.list({ status: 'all' })
     expect(computeTotals(all.items, customer.userId).remaining).toBe(7_500_000)
+  })
+})
+
+/* ============================ 12) النسخة الاحتياطية والاستعادة ============================ */
+
+describe('النسخة الاحتياطية والاستعادة', () => {
+  it('يستعيد دفترًا كاملًا في حساب جديد بلا تكرار ولا حذف', async () => {
+    actAs(merchant)
+    const party = await ds.parties.create({ kind: 'customer', name: 'أحمد', phone: '0771234567' })
+    await ds.entries.create({ partyId: party.id, entryType: 'debt', amountMinor: 2_000_000, currency: 'YER', clientRef: ref('bk1') })
+    await ds.entries.create({ partyId: party.id, entryType: 'payment', amountMinor: 500_000, currency: 'YER', clientRef: ref('bk2') })
+
+    const payload = buildBackupPayload({
+      profile: { id: merchant.userId, fullName: 'متجر النور', role: 'merchant', currency: 'YER' },
+      parties: (await ds.parties.list({ includeArchived: true })).items,
+      entries: (await ds.entries.list({ status: 'all' })).items,
+      engine: 'local',
+    })
+    expect(payload.counts).toEqual({ parties: 1, entries: 2 })
+
+    // دفتر جديد تمامًا على نفس الجهاز
+    const fresh = await registerUser('fresh@test.ye', 'دفتر جديد', 'merchant')
+    actAs(fresh)
+    expect((await ds.parties.list()).items).toHaveLength(0)
+
+    const result = await ds.restore!(payload)
+    expect(result.parties).toBe(1)
+    expect(result.entries).toBe(2)
+
+    const parties = (await ds.parties.list()).items
+    expect(parties).toHaveLength(1)
+    expect(parties[0]!.name).toBe('أحمد')
+    expect(await remainingOf(parties[0]!.id, fresh)).toBe(1_500_000)
+
+    // الاستعادة مرة أخرى لا تُكرّر شيئًا
+    const again = await ds.restore!(payload)
+    expect(again.parties).toBe(0)
+    expect(again.entries).toBe(0)
+    expect(again.skipped).toBeGreaterThanOrEqual(2)
+    expect((await ds.parties.list()).items).toHaveLength(1)
+    expect((await ds.entries.list({ status: 'all' })).items).toHaveLength(2)
+  })
+
+  it('لا يستعيد بيانات طرف آخر ولا العمليات المشتركة', async () => {
+    actAs(merchant)
+    const party = await ds.parties.create({ kind: 'customer', name: 'أحمد' })
+    await ds.entries.create({ partyId: party.id, entryType: 'debt', amountMinor: 1_000_000, currency: 'YER', clientRef: ref('bk3') })
+
+    const soloEntry = (await ds.entries.list({ status: 'all' })).items[0]!
+    const foreignEntry = { ...soloEntry, id: 'foreign-1', scope: 'shared' as const, relationshipId: 'rel-1' }
+
+    const payload = buildBackupPayload({
+      profile: null,
+      parties: [(await ds.parties.list()).items[0]!],
+      entries: [soloEntry, foreignEntry],
+      engine: 'local',
+    })
+
+    actAs(outsider)
+    const result = await ds.restore!(payload)
+    // الأطراف تُستعاد داخل دفترك، والعمليات المشتركة لا تُفرض أبدًا
+    expect(result.parties).toBe(1)
+    expect(result.entries).toBe(1)
+    expect(result.skipped).toBe(1)
+
+    const restoredParty = (await ds.parties.list()).items[0]!
+    expect(restoredParty.linkStatus).toBe('none')
+    expect(restoredParty.relationshipId).toBeNull()
+    expect(await remainingOf(restoredParty.id, outsider)).toBe(1_000_000)
   })
 })

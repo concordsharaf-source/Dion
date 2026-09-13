@@ -42,6 +42,15 @@ export function useAuth() {
       await queryClient.invalidateQueries({ queryKey: qk.session })
       return session
     },
+    /** دخول بحساب محفوظ على هذا الجهاز (وضع الدفتر المحلي) — بلا كلمة مرور */
+    async signInDevice(accountId: string) {
+      if (!ds.auth.signInAsDeviceAccount) throw new Error('غير متاح في هذا الوضع')
+      const session = await ds.auth.signInAsDeviceAccount(accountId)
+      queryClient.setQueryData(qk.session, session)
+      await queryClient.invalidateQueries({ queryKey: qk.session })
+      await queryClient.invalidateQueries({ queryKey: qk.profile })
+      return session
+    },
     async signOut() {
       await ds.auth.signOut()
       queryClient.clear()

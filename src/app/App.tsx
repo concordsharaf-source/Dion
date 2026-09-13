@@ -6,7 +6,7 @@ import { queryClient } from './queryClient'
 import { BootSplash, DataSourceProvider } from './DataSourceProvider'
 import { useProfile, useSession } from './hooks/useAuth'
 import { rememberPendingRoute } from './pendingRoute'
-import { ToastProvider } from '@/components/ui'
+import { ToastProvider, useToast } from '@/components/ui'
 import { AppShell } from './layout/AppShell'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { SetupScreen } from '@/features/auth/SetupScreen'
@@ -25,6 +25,8 @@ import { ProfileScreen } from '@/features/settings/ProfileScreen'
 import { SecurityScreen } from '@/features/settings/SecurityScreen'
 import { SyncScreen } from '@/features/settings/SyncScreen'
 import { PrivacyScreen } from '@/features/settings/PrivacyScreen'
+import { BackupScreen } from '@/features/settings/BackupScreen'
+import { useDailyBackupRunner } from './hooks/useBackup'
 
 /* ============================ حراسة المسارات ============================ */
 
@@ -49,6 +51,20 @@ function RequireProfile() {
   if (profile.isLoading) return <BootSplash />
   if (!profile.data) return <Navigate to="/setup" replace />
   return <Outlet />
+}
+
+/* ============================ حارس النسخة اليومية ============================ */
+
+/**
+ * يأخذ نسخة احتياطية تلقائية للتاجر في نهاية كل يوم (وتستبدل نسخة الأمس)،
+ * وعند إخفاء التطبيق، وعند حلول منتصف الليل — بلا أي تدخل من المستخدم.
+ */
+function BackupWatcher() {
+  const toast = useToast()
+  useDailyBackupRunner(() => {
+    toast.show('تم أخذ نسخة احتياطية تلقائية لليوم', 'info')
+  })
+  return null
 }
 
 /* ============================ شريط انقطاع الاتصال ============================ */
@@ -157,6 +173,7 @@ const router = createHashRouter([
               { path: 'settings/security', element: <SecurityScreen /> },
               { path: 'settings/sync', element: <SyncScreen /> },
               { path: 'settings/privacy', element: <PrivacyScreen /> },
+              { path: 'settings/backup', element: <BackupScreen /> },
             ],
           },
         ],
@@ -174,6 +191,7 @@ export function App() {
         <DataSourceProvider>
           <ToastProvider>
             <OfflineBanner />
+            <BackupWatcher />
             <RouterProvider router={router} />
           </ToastProvider>
         </DataSourceProvider>

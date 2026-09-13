@@ -36,4 +36,6 @@ export const qk = {
   relationships: ['relationships'] as const,
   proposals: ['balance-proposals'] as const,
   sync: ['sync'] as const,
+  backup: ['backup'] as const,
+  backupAuto: ['backup-auto'] as const,
 }

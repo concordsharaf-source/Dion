@@ -8,7 +8,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 export const DB_NAME = 'dafatar-db'
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 
 export interface UserRow {
   id: string
@@ -21,6 +21,17 @@ export interface UserRow {
 export interface MetaRow {
   key: string
   value: unknown
+}
+
+export interface BackupRow {
+  id: string
+  createdAt: string
+  dayKey: string
+  sizeBytes: number
+  counts: { parties: number; entries: number }
+  engine: string
+  profileName: string | null
+  payload: unknown
 }
 
 export interface OutboxRow {
@@ -58,6 +69,7 @@ interface DafatarDB extends DBSchema {
   balanceProposals: { key: string; value: Record<string, unknown>; indexes: { relationshipId: string } }
   notifications: { key: string; value: Record<string, unknown>; indexes: { userId: string } }
   auditLogs: { key: string; value: Record<string, unknown>; indexes: { entryId: string } }
+  backups: { key: string; value: BackupRow; indexes: { dayKey: string } }
   meta: { key: string; value: MetaRow }
   outbox: { key: string; value: OutboxRow; indexes: { status: string; clientRef: string } }
 }
@@ -110,6 +122,10 @@ export function getDB(): Promise<IDBPDatabase<DafatarDB>> {
         if (!db.objectStoreNames.contains('auditLogs')) {
           const s = db.createObjectStore('auditLogs', { keyPath: 'id' })
           s.createIndex('entryId', 'entryId')
+        }
+        if (!db.objectStoreNames.contains('backups')) {
+          const s = db.createObjectStore('backups', { keyPath: 'id' })
+          s.createIndex('dayKey', 'dayKey')
         }
         if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' })
         if (!db.objectStoreNames.contains('outbox')) {

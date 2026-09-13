@@ -59,9 +59,9 @@ describe('التطبيق — مسار العميل المستقل', () => {
     // لا يُطلب الربط لاستخدام الوظائف الأساسية
     expect(screen.queryByText(/يجب ربط حسابك/)).not.toBeInTheDocument()
 
-    // الانتقال إلى المحلات
-    await user.click(screen.getByRole('link', { name: 'المحلات' }))
-    expect(await screen.findByRole('heading', { name: 'المحلات' }, { timeout: 5000 })).toBeInTheDocument()
+    // الانتقال إلى قائمة الديون (المحلات عند العميل)
+    await user.click(screen.getByRole('link', { name: 'الديون' }))
+    expect(await screen.findByRole('heading', { name: /المحلات|الديون/ }, { timeout: 5000 })).toBeInTheDocument()
   })
 
   it('يسجّل محلًا ثم دينًا ويرى الرصيد المتبقي محدّثًا', async () => {
@@ -164,5 +164,85 @@ describe('التطبيق — مسار التاجر المستقل', () => {
     // تحذير فوري + منع الإرسال قبل الوصول لطبقة البيانات
     expect(await screen.findByRole('alert', undefined, { timeout: 5000 })).toHaveTextContent('المبلغ أكبر من المتبقي')
     expect(screen.getByRole('button', { name: 'تسجيل السداد' })).toBeDisabled()
+  })
+})
+
+describe('فتح نافذة الدين/السداد من الرئيسية', () => {
+  it('يفتح على خانة المبلغ مع لوحة الأرقام فورًا، والطرف يُختار من صف صغير', async () => {
+    const user = await startBook('تاجر', 'متجر السلام')
+
+    // ننشئ عميلًا أولًا
+    await user.click(await screen.findByRole('link', { name: 'العملاء' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('button', { name: 'إضافة عميل' }, { timeout: 5000 }))
+    await user.type(await screen.findByLabelText(/^الاسم/), 'خالد')
+    await user.click(screen.getByRole('button', { name: 'إضافة عميل' }))
+    await screen.findByRole('heading', { name: 'خالد' }, { timeout: 5000 })
+
+    // نعود إلى الرئيسية ثم نضغط «تسجيل دين»
+    await user.click(await screen.findByRole('link', { name: 'الرئيسية' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('button', { name: 'تسجيل دين' }, { timeout: 5000 }))
+
+    // لوحة الأرقام هي الواجهة الأولى — بلا قائمة أطراف وبلا تمرير
+    expect(await screen.findByRole('group', { name: 'لوحة الأرقام' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('بحث العميل')).not.toBeInTheDocument()
+
+    const amount = screen.getByLabelText('المبلغ')
+    await waitFor(() => expect(document.activeElement).toBe(amount), { timeout: 3000 })
+    await keypad(user, '15000')
+    expect(amount).toHaveValue('15,000')
+
+    // لا تسجيل قبل اختيار الطرف
+    expect(screen.getByRole('button', { name: 'تسجيل الدين' })).toBeDisabled()
+
+    // الاختيار من الصف الصغير أعلى النافذة
+    await user.click(screen.getByRole('button', { name: /اختر العميل/ }))
+    await user.click(await screen.findByRole('button', { name: /خالد/ }))
+
+    // المبلغ محفوظ، والمؤشر عاد إلى خانة المبلغ
+    expect(screen.getByLabelText('المبلغ')).toHaveValue('15,000')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('المبلغ')), { timeout: 3000 })
+
+    await user.click(screen.getByRole('button', { name: 'تسجيل الدين' }))
+    expect(await screen.findByText('تم تسجيل الدين في دفترك', undefined, { timeout: 5000 })).toBeInTheDocument()
+  })
+
+  it('نافذة السداد مستقلة: تُظهر المتبقي ولا تسمح بأكثر منه', async () => {
+    const user = await startBook('تاجر', 'متجر اليمن')
+    await user.click(await screen.findByRole('link', { name: 'العملاء' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('button', { name: 'إضافة عميل' }, { timeout: 5000 }))
+    await user.type(await screen.findByLabelText(/^الاسم/), 'سعيد')
+    await user.type(screen.getByLabelText(/رصيد افتتاحي/), '10000')
+    await user.click(screen.getByRole('button', { name: 'إضافة عميل' }))
+    await screen.findByRole('heading', { name: 'سعيد' }, { timeout: 5000 })
+
+    await user.click(await screen.findByRole('button', { name: 'تسجيل سداد' }, { timeout: 5000 }))
+    expect(await screen.findByRole('group', { name: 'لوحة الأرقام' })).toBeInTheDocument()
+    expect(screen.getByText(/المتبقي:/)).toBeInTheDocument()
+
+    await keypad(user, '15000')
+    expect(await screen.findByRole('alert', undefined, { timeout: 5000 })).toHaveTextContent('المبلغ أكبر من المتبقي')
+    expect(screen.getByRole('button', { name: 'تسجيل السداد' })).toBeDisabled()
+  })
+})
+
+describe('النسخة الاحتياطية', () => {
+  it('ينشئ نسخة على الجهاز من الإعدادات، والنسخة التلقائية مفعّلة للتاجر', async () => {
+    const user = await startBook('تاجر', 'متجر النسخ')
+
+    await user.click(await screen.findByRole('link', { name: 'الإعدادات' }, { timeout: 5000 }))
+    await user.click(await screen.findByRole('link', { name: 'النسخة الاحتياطية' }, { timeout: 5000 }))
+    expect(await screen.findByRole('heading', { name: 'النسخة الاحتياطية' })).toBeInTheDocument()
+
+    // الخيار اليومي مفعّل افتراضيًا للتاجر
+    expect(await screen.findByRole('switch', { name: 'نسخة يومية تلقائية' })).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(await screen.findByRole('button', { name: /إنشاء نسخة الآن/ }))
+    expect(await screen.findByText('نسخة محفوظة على جهازك', undefined, { timeout: 5000 })).toBeInTheDocument()
+    expect(await screen.findByText('تم إنشاء نسخة جديدة واستبدال السابقة')).toBeInTheDocument()
+    expect(screen.getByText('نسخة اليوم')).toBeInTheDocument()
+
+    // أدوات الاستعادة والتنزيل متاحة
+    expect(screen.getByRole('button', { name: /تنزيل النسخة كملف/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /استعادة من ملف نسخة/ })).toBeInTheDocument()
   })
 })

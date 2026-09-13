@@ -30,6 +30,8 @@ import { hashPassword, verifyPassword, sha256Hex } from './crypto'
 import { assertLinkUsable, expiryFromNow, generateToken, LINK_TTL_MS, tokenToCode } from '@/core/qr'
 import { normalizePhoneNumber } from '@/core/validation'
 import { getDB, type UserRow } from './db'
+import type { BackupPayload } from '@/core/backup'
+import type { RestoreResult } from '../port'
 import type {
   AuthPort,
   AuthSession,
@@ -452,6 +454,35 @@ export class LocalDataSource implements DataSource {
       }
       this.authListeners.forEach((cb) => cb(session))
       this.emit({ table: 'profile', action: 'insert', id, userId: id })
+      return session
+    },
+
+    /** قائمة الحسابات المحفوظة على هذا الجهاز — لإتاحة الدخول بعد الخروج */
+    listDeviceAccounts: async () => {
+      const db = await getDB()
+      const profiles = (await db.getAll('profiles')) as unknown as Profile[]
+      const accounts = profiles.map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        role: p.role,
+        createdAt: p.createdAt,
+      }))
+      accounts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      return accounts
+    },
+
+    signInAsDeviceAccount: async (accountId: string) => {
+      const db = await getDB()
+      const user = (await db.get('users', accountId)) as UserRow | undefined
+      if (!user) throw appError('not_found', undefined, 'هذا الحساب غير موجود على الجهاز.')
+      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      try {
+        sessionStorage.setItem(SESSION_TAB, user.id)
+        localStorage.setItem(SESSION_LS, user.id)
+      } catch {
+        /* ignore */
+      }
+      this.authListeners.forEach((cb) => cb(session))
       return session
     },
 
@@ -912,58 +943,103 @@ export class LocalDataSource implements DataSource {
       return updated
     },
 
-    reverse: async (id, note) => {
-      const session = await this.requireSession()
-      const profile = await this.requireProfile(session)
-      const entry = await this.getEntryOrThrow(id, session.userId)
-      const check = canPerform('reverse', entry, session.userId)
-      if (!check.allowed) throw appError(check.code ?? 'forbidden')
+  }
 
-      // منع تكرار العكس
-      const all = await this.visibleEntries(session.userId)
-      const pendingReversal = all.find((e) => e.reversesEntryId === entry.id && e.status !== 'rejected' && e.status !== 'cancelled')
-      if (pendingReversal) throw appError('conflict', undefined, 'توجد عملية عكس قائمة لهذه العملية.')
+  /* ============================ استعادة نسخة احتياطية ============================ */
 
-      const isShared = entry.scope === 'shared'
-      const reversal = await this.insertEntry({
-        scope: entry.scope,
-        entryType: entry.entryType,
-        entryKind: 'reversal',
-        status: isShared ? 'pending' : 'confirmed',
-        amountMinor: entry.amountMinor,
-        currency: entry.currency,
-        details: `عكس عملية: ${entry.details ?? (entry.entryType === 'debt' ? 'دين' : 'سداد')}`,
-        note: note ?? null,
-        reason: null,
-        occurredAt: nowISO(),
-        creatorId: session.userId,
-        creatorRole: profile.role,
-        creatorName: profile.fullName,
-        ownerId: entry.scope === 'solo' ? session.userId : null,
-        partyId: entry.scope === 'solo' ? entry.partyId : null,
-        relationshipId: entry.relationshipId,
-        merchantUserId: entry.merchantUserId,
-        customerUserId: entry.customerUserId,
-        merchantPartyId: entry.merchantPartyId,
-        customerPartyId: entry.customerPartyId,
-        confirmedBy: isShared ? null : session.userId,
-        confirmedAt: isShared ? null : nowISO(),
-        clientRef: `reversal:${entry.id}:${session.userId}`,
-        reversesEntryId: entry.id,
-      })
+  /**
+   * دمج آمن: نضيف الناقص فقط، بلا حذف وبلا تكرار.
+   * تُستعاد عمليات الدفتر الشخصي (solo) لأنها لا تعتمد على موافقة طرف آخر؛
+   * والعمليات المشتركة تُترَك لأنها تحتاج تأكيد الطرفين الحقيقي.
+   */
+  async restore(payload: BackupPayload): Promise<RestoreResult> {
+    const session = await this.requireSession()
+    const uid = session.userId
+    const db = await getDB()
+    const now = nowISO()
 
-      if (!isShared) {
-        const db = await getDB()
-        await db.put('entries', { ...entry, reversedByEntryId: reversal.id, updatedAt: nowISO() })
-      } else {
-        const other = counterpartyOf(entry, session.userId)
-        if (other) {
-          await this.notify(other, 'entry_reversal', 'طلب عكس عملية', 'عملية عكس بانتظار موافقتك', 'entry', reversal.id)
-        }
+    const myParties = ((await db.getAllFromIndex('parties', 'ownerId', uid)) as unknown as Party[]) ?? []
+    const byName = new Map<string, string>()
+    for (const party of myParties) {
+      byName.set(`${party.kind}:${normalizeArabic(party.name).trim().toLowerCase()}`, party.id)
+    }
+
+    const idMap = new Map<string, string>()
+    let partiesAdded = 0
+    let entriesAdded = 0
+    let skipped = 0
+
+    for (const party of payload.parties) {
+      const key = `${party.kind}:${normalizeArabic(party.name).trim().toLowerCase()}`
+      const known = myParties.find((p) => p.id === party.id)
+      if (known) {
+        idMap.set(party.id, known.id)
+        continue
+      }
+      const sameName = byName.get(key)
+      if (sameName) {
+        idMap.set(party.id, sameName)
+        skipped += 1
+        continue
+      }
+      // لا تُستعاد حالة الربط: الربط يحتاج موافقة الطرفين من جديد
+      const restoredParty: Party = {
+        ...party,
+        ownerId: uid,
+        linkedUserId: null,
+        linkedProfileName: null,
+        relationshipId: null,
+        linkStatus: 'none',
+        updatedAt: now,
+      }
+      await db.put('parties', restoredParty as unknown as Record<string, unknown>)
+      idMap.set(party.id, restoredParty.id)
+      byName.set(key, restoredParty.id)
+      partiesAdded += 1
+    }
+
+    const myEntries = await this.visibleEntries(uid)
+    const seenIds = new Set(myEntries.map((e) => e.id))
+    const seenRefs = new Set(myEntries.map((e) => `${e.creatorId}:${e.clientRef}`))
+
+    for (const entry of payload.entries) {
+      // العمليات الشخصية فقط: المشتركة تعتمد على تأكيد الطرف الآخر ولا تُفرض من نسخة
+      if (entry.scope !== 'solo') {
+        skipped += 1
+        continue
+      }
+      const refKey = `${uid}:${entry.clientRef ?? entry.id}`
+      if (seenIds.has(entry.id) || seenRefs.has(refKey)) {
+        skipped += 1
+        continue
+      }
+      const sourcePartyId = entry.partyId ?? entry.merchantPartyId ?? entry.customerPartyId
+      const partyId =
+        (sourcePartyId ? idMap.get(sourcePartyId) : undefined) ??
+        (sourcePartyId && myParties.some((p) => p.id === sourcePartyId) ? sourcePartyId : undefined)
+      if (!partyId) {
+        skipped += 1
+        continue
       }
 
-      return reversal
-    },
+      const restored: FinancialEntry = {
+        ...entry,
+        partyId,
+        ownerId: uid,
+        creatorId: uid,
+        updatedAt: now,
+      }
+      await db.put('entries', restored as unknown as Record<string, unknown>)
+      await this.audit(restored.id, uid, 'restored', { fromBackup: payload.createdAt })
+      seenIds.add(restored.id)
+      seenRefs.add(refKey)
+      entriesAdded += 1
+    }
+
+    if (partiesAdded > 0) this.emit({ table: 'parties', action: 'insert', id: 'restore', userId: uid })
+    if (entriesAdded > 0) this.emit({ table: 'entries', action: 'insert', id: 'restore', userId: uid })
+
+    return { parties: partiesAdded, entries: entriesAdded, skipped }
   }
 
   /* ============================ الربط بين الطرفين ============================ */

@@ -11,6 +11,7 @@
  *   3) التبديل بين المحرّكين سطرًا واحدًا في الإعدادات
  */
 
+import type { BackupPayload } from '@/core/backup'
 import type {
   AppNotification,
   BalanceProposal,
@@ -101,6 +102,18 @@ export interface AuthPort {
    * يُنشئ حسابًا محليًا باسم ورقم عشوائي غير معروض (لا حاجة لبريد إلكتروني).
    */
   signInQuick?(input: { fullName: string; role: Role }): Promise<AuthSession>
+  /** حسابات محفوظة على هذا الجهاز (وضع الدفتر المحلي) */
+  listDeviceAccounts?(): Promise<DeviceAccount[]>
+  /** دخول بحساب محفوظ على هذا الجهاز بلا كلمة مرور (وضع الدفتر المحلي) */
+  signInAsDeviceAccount?(accountId: string): Promise<AuthSession>
+}
+
+/** حساب محفوظ على الجهاز — للتبديل السريع بلا كلمات مرور */
+export interface DeviceAccount {
+  id: string
+  fullName: string
+  role: Role
+  createdAt: string
 }
 
 /* ============================ الأطراف (محل / عميل) ============================ */
@@ -167,8 +180,6 @@ export interface EntryPort {
   confirm(id: string): Promise<FinancialEntry>
   reject(id: string, reason?: string | null): Promise<FinancialEntry>
   cancel(id: string): Promise<FinancialEntry>
-  /** عكس عملية مؤكدة بقيد جديد (لا تعديل صامت) */
-  reverse(id: string, note?: string | null): Promise<FinancialEntry>
   countAwaitingMe(): Promise<number>
   /** كل عمليات طرف واحد (لحساب رصيده) */
   listByParty(partyId: string): Promise<FinancialEntry[]>
@@ -234,6 +245,14 @@ export interface SyncPort {
 
 /* ============================ العقد الكامل ============================ */
 
+/** نتيجة استعادة نسخة احتياطية */
+export interface RestoreResult {
+  parties: number
+  entries: number
+  /** عناصر تُخطّيت (موجودة سابقًا أو لا تخصّ هذا الدفتر) */
+  skipped: number
+}
+
 export interface DataSource {
   readonly kind: 'local' | 'supabase'
   /** هل يدعم الربط بين حسابين والمزامنة اللحظية؟ */
@@ -248,4 +267,6 @@ export interface DataSource {
   subscribe(cb: (event: DataEvent) => void): () => void
   /** تفريغ كل بيانات المستخدم الحالي (للتطوير/الخروج الكامل) */
   resetUserData?(): Promise<void>
+  /** استعادة نسخة احتياطية — دمج بلا حذف وبلا تكرار (حسب دعم المحرّك) */
+  restore?(payload: BackupPayload): Promise<RestoreResult>
 }

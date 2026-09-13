@@ -1,0 +1,251 @@
+import { useRef, useState } from 'react'
+import { Clock, Database, Download, HardDriveDownload, RotateCcw, ShieldCheck, Trash2, Upload } from 'lucide-react'
+import clsx from 'clsx'
+import { Button, Card, ConfirmDialog, SectionTitle, useToast } from '@/components/ui'
+import { PageHeader } from '@/components/PageHeader'
+import {
+  useAutoBackup,
+  useBackupMeta,
+  useClearBackup,
+  useCreateBackup,
+  useDownloadBackup,
+  useRestoreBackup,
+  useToggleAutoBackup,
+} from '@/app/hooks/useBackup'
+import { useProfile } from '@/app/hooks/useAuth'
+import { describeBackup } from '@/services/backupStore'
+import { formatDateTimeAr, formatRelativeAr } from '@/core/datetime'
+import { toUserMessage } from '@/core/errors'
+import { backupDayKey } from '@/core/backup'
+
+/**
+ * النسخة الاحتياطية — نسخة واحدة دائمًا على الجهاز.
+ * للتاجر تُؤخذ تلقائيًا في نهاية كل يوم وتستبدل نسخة اليوم السابق.
+ */
+export function BackupScreen() {
+  const toast = useToast()
+  const profile = useProfile()
+  const role = profile.data?.role ?? 'customer'
+
+  const meta = useBackupMeta()
+  const auto = useAutoBackup(role)
+  const createBackup = useCreateBackup()
+  const download = useDownloadBackup()
+  const restore = useRestoreBackup()
+  const clearBackup = useClearBackup()
+  const toggleAuto = useToggleAutoBackup()
+
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+
+  const backup = meta.data ?? null
+  const isToday = backup ? backup.dayKey === backupDayKey() : false
+  const busy = createBackup.isPending || download.isPending || restore.isPending || clearBackup.isPending
+
+  async function onCreate() {
+    try {
+      await createBackup.mutateAsync()
+      toast.show('تم إنشاء نسخة جديدة واستبدال السابقة')
+    } catch (e) {
+      toast.show(toUserMessage(e), 'error')
+    }
+  }
+
+  async function onDownload() {
+    try {
+      await download.mutateAsync()
+      toast.show('تم تنزيل النسخة كملف')
+    } catch (e) {
+      toast.show(toUserMessage(e), 'error')
+    }
+  }
+
+  async function onFile(files: FileList | null) {
+    const file = files?.[0]
+    if (!file) return
+    try {
+      const result = await restore.mutateAsync(file)
+      toast.show(
+        `تمت الاستعادة: ${result.parties} طرف · ${result.entries} عملية${result.skipped > 0 ? ` (تخطّي ${result.skipped} موجودة سابقًا)` : ''}`,
+      )
+    } catch (e) {
+      toast.show(toUserMessage(e), 'error')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="pb-8">
+      <PageHeader title="النسخة الاحتياطية" />
+
+      <div className="space-y-4 px-4 pt-4">
+        {/* حالة النسخة */}
+        <Card className="space-y-3">
+          <div className="flex items-start gap-3">
+            <span
+              className={clsx(
+                'grid h-11 w-11 shrink-0 place-items-center rounded-2xl',
+                backup ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200' : 'bg-ink-200 text-ink-500 dark:bg-ink-800',
+              )}
+            >
+              <Database size={20} />
+            </span>
+            <div className="flex-1">
+              <p className="font-extrabold">{backup ? 'نسخة محفوظة على جهازك' : 'لا توجد نسخة بعد'}</p>
+              <p className="mt-0.5 text-[0.75rem] leading-5 text-ink-500">
+                {backup
+                  ? `${formatDateTimeAr(backup.createdAt)} · ${formatRelativeAr(backup.createdAt)}`
+                  : 'أنشئ نسخة الآن لتحتفظ بأرقامك حتى لو حُذفت بيانات المتصفح.'}
+              </p>
+              {backup ? (
+                <p className="mt-1 text-[0.75rem] font-bold text-ink-600 dark:text-ink-300">{describeBackup(backup)}</p>
+              ) : null}
+            </div>
+            {backup ? (
+              <span
+                className={clsx(
+                  'chip shrink-0',
+                  isToday ? 'bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' : 'bg-ink-200 text-ink-600 dark:bg-ink-800 dark:text-ink-300',
+                )}
+              >
+                {isToday ? 'نسخة اليوم' : 'نسخة سابقة'}
+              </span>
+            ) : null}
+          </div>
+
+          <ul className="space-y-1.5 rounded-2xl bg-ink-100 p-3 text-[0.75rem] leading-5 text-ink-600 dark:bg-ink-900 dark:text-ink-300">
+            <li className="flex items-center gap-2">
+              <ShieldCheck size={14} className="shrink-0" /> نسخة واحدة دائمًا — كل نسخة جديدة تستبدل القديمة تمامًا.
+            </li>
+            <li className="flex items-center gap-2">
+              <Clock size={14} className="shrink-0" /> للتاجر تُؤخذ تلقائيًا في نهاية كل يوم.
+            </li>
+            <li className="flex items-center gap-2">
+              <HardDriveDownload size={14} className="shrink-0" /> تُحفظ على جهازك فقط ولا تُرسل لأي خادم.
+            </li>
+          </ul>
+        </Card>
+
+        {/* النسخة التلقائية */}
+        <section>
+          <SectionTitle>النسخة اليومية التلقائية</SectionTitle>
+          <Card className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300">
+              <Clock size={18} />
+            </span>
+            <div className="flex-1">
+              <p className="font-bold">نسخة في نهاية كل يوم</p>
+              <p className="text-[0.6875rem] text-ink-500">
+                {auto.data || role !== 'merchant'
+                  ? 'تُستبدل نسخة الأمس بنسخة اليوم تلقائيًا.'
+                  : 'معطّلة — فعّلها لتأخذ نسخة تلقائية كل يوم.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(auto.data)}
+              aria-label="نسخة يومية تلقائية"
+              onClick={() =>
+                void toggleAuto
+                  .mutateAsync(!auto.data)
+                  .then(() => toast.show(auto.data ? 'تم إيقاف النسخة اليومية' : 'تم تفعيل النسخة اليومية', 'info'))
+                  .catch((e) => toast.show(toUserMessage(e), 'error'))
+              }
+              className={clsx(
+                'relative h-7 w-12 shrink-0 rounded-full transition',
+                auto.data ? 'bg-brand-600' : 'bg-ink-300 dark:bg-ink-700',
+              )}
+            >
+              <span
+                className={clsx(
+                  'absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all',
+                  auto.data ? 'start-1' : 'start-6',
+                )}
+              />
+            </button>
+          </Card>
+        </section>
+
+        {/* الأدوات */}
+        <section>
+          <SectionTitle>النسخ والاستعادة</SectionTitle>
+          <div className="space-y-2">
+            <Button block size="lg" icon={<Database size={18} />} loading={createBackup.isPending} disabled={busy} onClick={() => void onCreate()}>
+              إنشاء نسخة الآن (تستبدل السابقة)
+            </Button>
+            <Button
+              block
+              variant="soft"
+              icon={<Download size={18} />}
+              loading={download.isPending}
+              disabled={busy}
+              onClick={() => void onDownload()}
+            >
+              تنزيل النسخة كملف (.json)
+            </Button>
+            <Button
+              block
+              variant="soft"
+              icon={<Upload size={18} />}
+              loading={restore.isPending}
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              استعادة من ملف نسخة
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => void onFile(e.target.files)}
+            />
+
+            {backup ? (
+              <Button
+                block
+                variant="ghost"
+                className="text-danger-600"
+                icon={<Trash2 size={17} />}
+                disabled={busy}
+                onClick={() => setConfirmClear(true)}
+              >
+                حذف النسخة المحفوظة
+              </Button>
+            ) : null}
+          </div>
+        </section>
+
+        <p className="px-1 text-[0.6875rem] leading-5 text-ink-500">
+          الاستعادة <b>دمج آمن</b>: تُضاف فقط السجلات الناقصة، ولا يُحذف أو يُستبدل أي سجل موجود، ولا تتكرر العملية مرتين
+          (كل عملية تحمل معرّفًا فريدًا). عمليات الدفتر الشخصي تُستعاد كما هي، والعمليات المشتركة مع طرف آخر تبقى بيد الطرفين.
+        </p>
+
+        <Button block variant="ghost" icon={<RotateCcw size={17} />} disabled={busy} onClick={() => void meta.refetch()}>
+          تحديث الحالة
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="حذف النسخة المحفوظة"
+        message="سيُحذف ملف النسخة من هذا الجهاز. بياناتك الحالية في الدفتر لا تتأثر إطلاقًا."
+        confirmLabel="حذف النسخة"
+        tone="danger"
+        loading={clearBackup.isPending}
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={() =>
+          void clearBackup
+            .mutateAsync()
+            .then(() => {
+              setConfirmClear(false)
+              toast.show('تم حذف النسخة المحفوظة', 'info')
+            })
+            .catch((e) => toast.show(toUserMessage(e), 'error'))
+        }
+      />
+    </div>
+  )
+}
