@@ -7,10 +7,10 @@ import { playFeedback } from '@/core/sound'
 import {
   clearRollingBackup,
   createRollingBackup,
-  downloadBackupFile,
   readAutoBackupEnabled,
   readBackupMeta,
   restoreFromFile,
+  saveBackupFile,
   startDailyBackupRunner,
   writeAutoBackupEnabled,
 } from '@/services/backup'
@@ -53,7 +53,7 @@ export function useCreateBackup() {
   })
 }
 
-/** تنزيل نسخة كملف على الجهاز */
+/** يحفظ/ينزّل النسخة كملف على الجهاز بأفضل طريقة يسمح بها المتصفح */
 export function useDownloadBackup() {
   const ds = useDataSource()
   const profile = useProfile()
@@ -62,8 +62,8 @@ export function useDownloadBackup() {
   return useMutation({
     mutationFn: async () => {
       const { payload, meta } = await createRollingBackup(ds, profile.data ?? null)
-      downloadBackupFile(payload)
-      return meta
+      const saved = await saveBackupFile(payload)
+      return { meta, saved }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.backup })

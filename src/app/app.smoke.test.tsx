@@ -271,9 +271,11 @@ describe('النسخة الاحتياطية', () => {
     expect(await screen.findByText('تم إنشاء نسخة جديدة واستبدال السابقة')).toBeInTheDocument()
     expect(screen.getByText('نسخة اليوم')).toBeInTheDocument()
 
-    // أدوات الاستعادة والتنزيل متاحة
-    expect(screen.getByRole('button', { name: /تنزيل النسخة كملف/ })).toBeInTheDocument()
+    // أدوات الاستعادة وحفظ الملف متاحة، والشاشة تشرح أين تسكن النسخة
+    expect(screen.getByRole('button', { name: /حفظ ملف النسخة على الجهاز/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /استعادة من ملف نسخة/ })).toBeInTheDocument()
+    expect(screen.getByText('أين توجد النسخة؟')).toBeInTheDocument()
+    expect(screen.getByText(/ليست ملفًا في مجلد/)).toBeInTheDocument()
   })
 })
 

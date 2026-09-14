@@ -161,7 +161,15 @@ export function SecurityScreen() {
               <ul className="list-inside list-disc space-y-1 ps-1">
                 <li>لا تشارك جهازك مع آخرين — الوصول إلى المتصفح يعني الوصول إلى الدفتر.</li>
                 <li>ثبّت التطبيق على شاشة جهازك الرئيسية ليعمل كتطبيق مستقل.</li>
-                <li>نزّل نسخة احتياطية من الإعدادات ← البيانات بشكل دوري.</li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings/backup')}
+                    className="font-bold text-brand-700 underline decoration-dotted underline-offset-2 dark:text-brand-200"
+                  >
+                    احفظ نسخة احتياطية الآن (الإعدادات ← البيانات ← النسخة الاحتياطية)
+                  </button>
+                </li>
                 <li>سجّل الخروج عند استخدام جهاز مشترك.</li>
               </ul>
             </Card>

@@ -1,5 +1,15 @@
 import { useRef, useState } from 'react'
-import { Clock, Database, Download, HardDriveDownload, RotateCcw, ShieldCheck, Trash2, Upload } from 'lucide-react'
+import {
+  Clock,
+  Database,
+  Download,
+  FolderOpen,
+  HardDriveDownload,
+  RotateCcw,
+  ShieldCheck,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import clsx from 'clsx'
 import { Button, Card, ConfirmDialog, SectionTitle, useToast } from '@/components/ui'
 import { PageHeader } from '@/components/PageHeader'
@@ -14,9 +24,10 @@ import {
 } from '@/app/hooks/useBackup'
 import { useProfile } from '@/app/hooks/useAuth'
 import { describeBackup } from '@/services/backupStore'
+import { BACKUP_STORAGE_HINT, describeBackupSaveMethod, detectBackupSaveMethod } from '@/services/backup'
 import { formatDateTimeAr, formatRelativeAr } from '@/core/datetime'
 import { toUserMessage } from '@/core/errors'
-import { backupDayKey } from '@/core/backup'
+import { backupDayKey, backupFileName } from '@/core/backup'
 
 /**
  * النسخة الاحتياطية — نسخة واحدة دائمًا على الجهاز.
@@ -37,6 +48,9 @@ export function BackupScreen() {
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  /** آخر نتيجة حفظ ملف: تخبر المستخدم أين وجد الملف فعلًا */
+  const [savedHint, setSavedHint] = useState<string | null>(null)
+  const saveMethod = detectBackupSaveMethod()
 
   const backup = meta.data ?? null
   const isToday = backup ? backup.dayKey === backupDayKey() : false
@@ -51,10 +65,11 @@ export function BackupScreen() {
     }
   }
 
-  async function onDownload() {
+  async function onSaveFile() {
     try {
-      await download.mutateAsync()
-      toast.show('تم تنزيل النسخة كملف')
+      const { saved } = await download.mutateAsync()
+      setSavedHint(saved.hint)
+      toast.show(saved.cancelled ? 'أُلغيت العملية — لم يُحفظ ملف' : saved.hint, saved.cancelled ? 'info' : 'ok')
     } catch (e) {
       toast.show(toUserMessage(e), 'error')
     }
@@ -127,6 +142,40 @@ export function BackupScreen() {
           </ul>
         </Card>
 
+        {/* أين توجد النسخة؟ — الإجابة عن «عملت نسخة لكني لا أجدها» */}
+        <section>
+          <SectionTitle>أين توجد النسخة؟</SectionTitle>
+          <Card className="space-y-2.5 text-[0.75rem] leading-5">
+            <p className="flex items-center gap-2 font-bold text-ink-800 dark:text-ink-100">
+              <FolderOpen size={16} /> مكانها على جهازك
+            </p>
+            <ul className="space-y-2 text-ink-600 dark:text-ink-300">
+              <li className="flex items-start gap-2">
+                <Database size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>نسخة التطبيق (المُبيّنة أعلاه):</b> محفوظة داخل قاعدة بيانات المتصفح على هذا الجهاز —{' '}
+                  <span className="font-mono text-[0.6875rem]">{BACKUP_STORAGE_HINT}</span>. ليست ملفًا في مجلد
+                  التنزيلات، لذلك لا تظهر في مدير الملفات.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Download size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>ملف يمكن نقله:</b> اضغط «حفظ ملف النسخة على الجهاز (.json)» في قسم «النسخ والاستعادة» بالأسفل،
+                  وسيُحفظ باسم <span className="font-mono text-[0.6875rem]">{backupFileName()}</span> — ونخبرك بمكانه
+                  بعد الحفظ.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Upload size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>على جهاز جديد:</b> انقل نفس الملف ثم «استعادة من ملف نسخة» — الاستعادة دمج آمن بلا تكرار.
+                </span>
+              </li>
+            </ul>
+          </Card>
+        </section>
+
         {/* النسخة التلقائية */}
         <section>
           <SectionTitle>النسخة اليومية التلقائية</SectionTitle>
@@ -181,10 +230,19 @@ export function BackupScreen() {
               icon={<Download size={18} />}
               loading={download.isPending}
               disabled={busy}
-              onClick={() => void onDownload()}
+              onClick={() => void onSaveFile()}
             >
-              تنزيل النسخة كملف (.json)
+              حفظ ملف النسخة على الجهاز (.json)
             </Button>
+            <p className="px-1 text-[0.6875rem] leading-5 text-ink-500">
+              الوسيلة على جهازك: {describeBackupSaveMethod(saveMethod)} — الملف باسم{' '}
+              <b className="font-mono text-[0.625rem]">{backupFileName()}</b>
+              {savedHint ? (
+                <span className="mt-1 block font-bold text-brand-700 dark:text-brand-200" role="status">
+                  {savedHint}
+                </span>
+              ) : null}
+            </p>
             <Button
               block
               variant="soft"

@@ -79,6 +79,134 @@ export function downloadBackupFile(payload: BackupPayload): void {
   URL.revokeObjectURL(url)
 }
 
+/* ============================ إخراج ملف النسخة إلى الجهاز ============================ */
+
+/**
+ * طريقة حفظ الملف تختلف بين المنصات، وهذه هي المشكلة التي تُقرأ عادةً كـ«لا أجدها»:
+ *   · desktop (كروم/إيدج): File System Access API ⇒ المستخدم يختار المجلد بنفسه.
+ *   · iOS (سفاري/PWA مثبّت): لا تنزيل فعلي ⇒ قائمة المشاركة ← «حفظ في الملفات».
+ *   · الباقي: تنزيل كلاسيكي إلى مجلد التنزيلات.
+ */
+export type BackupSaveMethod = 'file-picker' | 'share' | 'download'
+
+export interface BackupSaveResult {
+  method: BackupSaveMethod
+  fileName: string
+  /** جملة قصيرة تخبر المستخدم أين ذهب الملف بالضبط */
+  hint: string
+  /** أُلغيت النافذة (picker/مشاركة) ⇒ لم يُحفظ شيء ولا نُعاود التنزيل */
+  cancelled: boolean
+}
+
+interface SaveFilePickerOptions {
+  suggestedName?: string
+  types?: { description?: string; accept: Record<string, string[]> }[]
+}
+
+interface FileSystemWritableLike {
+  write(data: Blob | string): Promise<void>
+  close(): Promise<void>
+}
+
+interface FileSystemFileHandleLike {
+  createWritable(): Promise<FileSystemWritableLike>
+}
+
+type WindowWithPicker = Window & { showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandleLike> }
+type NavigatorWithShare = Navigator & {
+  canShare?: (data: ShareData) => boolean
+  share?: (data: ShareData) => Promise<void>
+}
+
+interface BackupSaveEnv {
+  hasFileSystemAccess: boolean
+  canShareFiles: boolean
+}
+
+/** أفضل طريقة متاحة (نقية بلا DOM — لسهولة الاختبار) */
+export function chooseBackupSaveMethod(env: BackupSaveEnv): BackupSaveMethod {
+  if (env.hasFileSystemAccess) return 'file-picker'
+  if (env.canShareFiles) return 'share'
+  return 'download'
+}
+
+/** كيف نسمّي الطريقة للمستخدم؟ */
+export function describeBackupSaveMethod(method: BackupSaveMethod): string {
+  if (method === 'file-picker') return 'نافذة حفظ تختار فيها المجلد'
+  if (method === 'share') return 'المشاركة ← «حفظ في الملفات» (iOS)'
+  return 'تنزيل إلى مجلد التنزيلات'
+}
+
+/** أين يجد الملف بعد الحفظ بهذه الطريقة؟ */
+export function describeBackupSaveLocation(method: BackupSaveMethod, fileName: string): string {
+  if (method === 'file-picker') return `حُفظ الملف في المجلد الذي اخترته باسم ${fileName}`
+  if (method === 'share') return `من قائمة المشاركة اختر «حفظ في الملفات» — الملف باسم ${fileName}`
+  return `ستجده في مجلد التنزيلات (Downloads) باسم ${fileName}`
+}
+
+/** الطريقة التي سيُستخدم عليها هذا الجهاز/المتصفح الآن (للعرض قبل الضغط) */
+export function detectBackupSaveMethod(): BackupSaveMethod {
+  if (typeof window === 'undefined') return 'download'
+  const picker = typeof (window as WindowWithPicker).showSaveFilePicker === 'function'
+  return chooseBackupSaveMethod({ hasFileSystemAccess: picker, canShareFiles: canShareBackupFile() })
+}
+
+function canShareBackupFile(file?: File): boolean {
+  if (typeof navigator === 'undefined') return false
+  const nav = navigator as NavigatorWithShare
+  if (typeof nav.canShare !== 'function') return false
+  try {
+    return nav.canShare(file ? { files: [file] } : { files: [new File(['{}'], 'x.json', { type: 'application/json' })] })
+  } catch {
+    return false
+  }
+}
+
+function isUserCancellation(error: unknown): boolean {
+  return error instanceof DOMException ? error.name === 'AbortError' : false
+}
+
+/**
+ * يُخرج نسخة جاهزة إلى جهازك بأفضل طريقة يسمح بها المتصفح، ويعيد وصفًا لمكان الملف.
+ * لا يرمي استثناءً: أي فشل غير متوقع يسقط إلى التنزيل الكلاسيكي.
+ */
+export async function saveBackupFile(payload: BackupPayload): Promise<BackupSaveResult> {
+  const fileName = backupFileName(new Date(payload.createdAt))
+  const text = serializeBackup(payload)
+  const file = new File([text], fileName, { type: 'application/json' })
+  const nav = typeof navigator === 'undefined' ? (undefined as unknown as NavigatorWithShare) : (navigator as NavigatorWithShare)
+  const picker = typeof window === 'undefined' ? undefined : (window as WindowWithPicker).showSaveFilePicker
+  const method = chooseBackupSaveMethod({ hasFileSystemAccess: typeof picker === 'function', canShareFiles: canShareBackupFile(file) })
+
+  try {
+    if (method === 'file-picker' && picker) {
+      const handle = await picker.call(window as WindowWithPicker, {
+        suggestedName: fileName,
+        types: [{ description: 'نسخة دفتر الديون', accept: { 'application/json': ['.json'] } }],
+      })
+      const writable = await handle.createWritable()
+      await writable.write(new Blob([text], { type: 'application/json' }))
+      await writable.close()
+      return { method, fileName, hint: describeBackupSaveLocation(method, fileName), cancelled: false }
+    }
+    if (method === 'share' && nav?.share) {
+      await nav.share({ files: [file], title: fileName })
+      return { method, fileName, hint: describeBackupSaveLocation(method, fileName), cancelled: false }
+    }
+  } catch (error) {
+    if (isUserCancellation(error)) {
+      return { method, fileName, hint: 'أُلغيت العملية — لم يُحفظ أي ملف.', cancelled: true }
+    }
+    // مثال الفشل المتوقع: المتصفح يطلب إيماءة مستخدم ⇒ نرجع للتنزيل العادي
+  }
+
+  downloadBackupFile(payload)
+  return { method: 'download', fileName, hint: describeBackupSaveLocation('download', fileName), cancelled: false }
+}
+
+/** المكان الداخلي للنسخة داخل التطبيق (يُعرض للمستخدم حتى لا يبحث عن ملف غير موجود) */
+export const BACKUP_STORAGE_HINT = 'dafatar-db ← مخزن meta ← المفتاح dafatar.backup'
+
 /** يستعيد من ملف نسخة احتياطية (دمج بلا حذف وبلا تكرار) */
 export async function restoreFromFile(ds: DataSource, file: File): Promise<RestoreResult> {
   if (!ds.restore) {
@@ -162,3 +290,4 @@ export function startDailyBackupRunner(options: {
 }
 
 export { readRollingBackup, readBackupMeta, clearRollingBackup, readAutoBackupEnabled, writeAutoBackupEnabled }
+
