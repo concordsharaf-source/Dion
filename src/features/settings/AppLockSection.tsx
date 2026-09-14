@@ -144,8 +144,8 @@ export function AppLockSection({ userName }: { userName?: string | null }) {
               <Chip tone={config.mode === 'off' ? 'neutral' : 'ok'}>{statusLabel}</Chip>
             </div>
             <p className="mt-1 text-[0.75rem] leading-5 text-ink-600 dark:text-ink-300">
-              عند تفعيل القفل تُطلب البصمة تلقائيًا عند فتح التطبيق (بلا ضغط أي زر)، وإن تعذّرت لأي سبب يظهر الباترن
-              مباشرة.
+              عند فتح التطبيق تبقى الشاشة فارغة وتظهر نافذة البصمة التي يُظهرها جهازك فقط (بلا أزرار ولا نصوص داخل
+              التطبيق)، وتُعاد المطالبة تلقائيًا عند الإلغاء أو العودة للتطبيق. بعد ٣ محاولات فاشلة يظهر الباترن.
             </p>
           </div>
         </div>

@@ -1,14 +1,15 @@
 /**
  * اختبارات شاشة القفل:
- *   · مطالبة تلقائية بالبصمة فور ظهور الشاشة (بلا ضغط أي زر)
- *   · التراجع التلقائي إلى الباترن عند تعذّر البصمة لأي سبب
+ *   · القفل بالبصمة ⇐ شاشة فارغة تمامًا + مطالبة تلقائية فورية (بلا ضغط أي زر)
+ *   · الإلغاء/الفشل ⇐ إعادة الطلب تلقائيًا، والباترن يظهر بعد ٣ محاولات فقط
+ *   · البصمة غير متاحة على الجهاز ⇐ الباترن مباشرة (بلا حلقة إعادة طلب)
  *   · فتح بالباترن الصحيح، ورفض الخاطئ
  */
 
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LockScreen } from './LockScreen'
+import { LockScreen, MAX_BIOMETRIC_ATTEMPTS } from './LockScreen'
 import { clearPattern, disableLock, setPattern, writeCredentialId, writeLockMode } from '@/core/appLock'
 
 const getMock = vi.fn()
@@ -32,6 +33,19 @@ function fakeCredentials() {
   })
 }
 
+function noPlatformAuthenticator() {
+  Object.defineProperty(window.PublicKeyCredential, 'isUserVerifyingPlatformAuthenticatorAvailable', {
+    configurable: true,
+    writable: true,
+    value: async () => false,
+  })
+}
+
+function armBiometric() {
+  writeCredentialId('cred-1', 'بصمة هذا الجهاز')
+  writeLockMode('biometric')
+}
+
 beforeEach(() => {
   disableLock()
   clearPattern()
@@ -45,10 +59,9 @@ afterEach(() => {
   clearPattern()
 })
 
-describe('القفل بالبصمة', () => {
+describe('القفل بالبصمة — شاشة فارغة ونكتفي بنافذة الجهاز', () => {
   it('يطلب البصمة تلقائيًا عند ظهور الشاشة بلا أي ضغط', async () => {
-    writeCredentialId('cred-1', 'بصمة هذا الجهاز')
-    writeLockMode('biometric')
+    armBiometric()
     getMock.mockResolvedValue({ id: 'cred-1', type: 'public-key' })
 
     const onUnlocked = vi.fn()
@@ -62,29 +75,78 @@ describe('القفل بالبصمة', () => {
     expect(options.allowCredentials?.[0]?.type).toBe('public-key')
   })
 
-  it('يظهر الباترن فورًا إذا تعذّرت البصمة لأي سبب', async () => {
-    writeCredentialId('cred-1', 'بصمة هذا الجهاز')
-    writeLockMode('biometric')
+  it('لا يرسم أي واجهة انتظار: لا عنوان ولا أزرار ولا نص المطالبة', async () => {
+    armBiometric()
+    await setPattern([0, 1, 2, 5])
+    getMock.mockImplementation(() => new Promise(() => {})) // الجهاز لم يرد بعد
+
+    const { container } = render(<LockScreen onUnlocked={vi.fn()} userName="شرف الدين" />)
+
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.queryByText('دفتر الديون مقفل')).toBeNull()
+    expect(screen.queryByText(/ضع إصبعك/)).toBeNull()
+    expect(screen.queryByRole('group', { name: 'لوحة الباترن' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    // لا شيء ظاهر على الشاشة (بقي نص للقارئ الشاشة فقط)
+    expect(container.textContent).toBe('جارٍ التحقق من البصمة…')
+    expect(container.querySelector('svg')).toBeNull()
+  })
+
+  it('يعيد الطلب تلقائيًا عند الإلغاء، ويكتفي بالباترن بعد ٣ محاولات فاشلة', async () => {
+    armBiometric()
     await setPattern([0, 1, 2, 5])
     getMock.mockRejectedValue(Object.assign(new Error('fail'), { name: 'NotAllowedError' }))
 
     const onUnlocked = vi.fn()
     render(<LockScreen onUnlocked={onUnlocked} />)
 
+    // المحاولات الثلاث تتم تلقائيًا (بلا ضغط) والشاشة تبقى فارغة خلالها
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(MAX_BIOMETRIC_ATTEMPTS), { timeout: 8000 })
+    expect(await screen.findByText('تعذّرت البصمة — استخدم الباترن', {}, { timeout: 4000 })).toBeInTheDocument()
     expect(await screen.findByRole('group', { name: 'لوحة الباترن' })).toBeInTheDocument()
-    expect(await screen.findByText('تعذّرت البصمة — استخدم الباترن أدناه')).toBeInTheDocument()
     expect(onUnlocked).not.toHaveBeenCalled()
   })
 
-  it('يعرض علامة المطالبة بالبصمة والاستعداد لها', () => {
-    writeCredentialId('cred-1', 'بصمة هذا الجهاز')
-    writeLockMode('biometric')
-    getMock.mockImplementation(() => new Promise(() => {}))
+  it('لا يُظهر الباترن قبل استنفاد المحاولات', async () => {
+    armBiometric()
+    await setPattern([0, 1, 2, 5])
+    getMock.mockRejectedValueOnce(Object.assign(new Error('fail'), { name: 'NotAllowedError' }))
+    getMock.mockImplementation(() => new Promise(() => {})) // المحاولة الثانية معلّقة
 
     render(<LockScreen onUnlocked={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: 'فتح بالبصمة' })).toBeInTheDocument()
-    expect(screen.getByText(/ضع إصبعك على مستشعر البصمة/)).toBeInTheDocument()
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2), { timeout: 4000 })
+    expect(screen.queryByRole('group', { name: 'لوحة الباترن' })).toBeNull()
+    expect(screen.queryByText('دفتر الديون مقفل')).toBeNull()
+  })
+
+  it('يعرض الباترن مباشرة إذا لم تكن البصمة متاحة على الجهاز (بلا حلقة طلب)', async () => {
+    armBiometric()
+    await setPattern([0, 1, 2, 5])
+    noPlatformAuthenticator()
+
+    render(<LockScreen onUnlocked={vi.fn()} />)
+
+    expect(await screen.findByRole('group', { name: 'لوحة الباترن' })).toBeInTheDocument()
+    await waitFor(() => expect(getMock).not.toHaveBeenCalled())
+  })
+
+  it('زر إعادة المحاولة بالبصمة يُفرّغ الشاشة ويعيد الطلب', async () => {
+    armBiometric()
+    await setPattern([0, 1, 2, 5])
+    getMock.mockRejectedValue(Object.assign(new Error('fail'), { name: 'NotAllowedError' }))
+    const user = userEvent.setup()
+
+    render(<LockScreen onUnlocked={vi.fn()} />)
+
+    const retry = await screen.findByRole('button', { name: 'إعادة المحاولة بالبصمة' }, { timeout: 8000 })
+    const before = getMock.mock.calls.length
+    getMock.mockImplementation(() => new Promise(() => {}))
+    await user.click(retry)
+
+    await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(before))
+    expect(screen.queryByRole('group', { name: 'لوحة الباترن' })).toBeNull()
   })
 })
 
@@ -127,6 +189,6 @@ describe('القفل بالباترن', () => {
 
     expect(await screen.findByRole('group', { name: 'لوحة الباترن' })).toBeInTheDocument()
     expect(getMock).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'فتح بالبصمة' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'إعادة المحاولة بالبصمة' })).not.toBeInTheDocument()
   })
 })
