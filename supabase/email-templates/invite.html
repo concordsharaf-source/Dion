@@ -1,0 +1,14 @@
+<div dir="rtl" style="background:#f1f5f9;padding:24px;font-family:Tahoma,Arial,sans-serif">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px">
+    <p style="margin:0 0 4px;font-size:20px;font-weight:bold;color:#0f766e">دفتر الديون</p>
+    <p style="margin:0 0 18px;font-size:12px;color:#94a3b8">إدارة الديون والسداد ببساطة</p>
+    <p style="margin:0 0 10px;font-size:16px;font-weight:bold;color:#0f172a">تمت دعوتك إلى دفتر الديون</p>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.9;color:#334155">اضغط الزر لقبول الدعوة وإنشاء كلمة المرور والبدء.</p>
+    <p style="text-align:center;margin:0 0 22px">
+      <a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&amp;type=invite" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:999px;font-size:15px;font-weight:bold">قبول الدعوة</a>
+    </p>
+    <p style="margin:0 0 6px;font-size:12px;color:#64748b">إن لم يعمل الزر، انسخ الرابط التالي وافتحه في المتصفح:</p>
+    <p dir="ltr" style="margin:0 0 18px;font-size:12px;color:#0f766e;word-break:break-all">{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=invite</p>
+    <p style="margin:0;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8">إن لم تكن تتوقع هذه الدعوة فتجاهلها.</p>
+  </div>
+</div>

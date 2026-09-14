@@ -223,20 +223,14 @@ const confirmPassword = z
   .string()
   .min(1, { message: 'أعد كتابة كلمة المرور' })
 
-export const signUpDeviceSchema = z
-  .object({
-    fullName: z
-      .unknown()
-      .transform((v) => sanitizeText(v, 60))
-      .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
-    phone: requiredPhoneField,
-    password: passwordSchema,
-    confirmPassword,
-  })
-  .refine((v) => v.password === v.confirmPassword, {
-    message: 'كلمتا المرور غير متطابقتين',
-    path: ['confirmPassword'],
-  })
+/** إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف (بلا كلمة مرور) */
+export const signUpDeviceSchema = z.object({
+  fullName: z
+    .unknown()
+    .transform((v) => sanitizeText(v, 60))
+    .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
+  phone: requiredPhoneField,
+})
 
 export const signUpCloudSchema = z
   .object({
@@ -254,23 +248,10 @@ export const signUpCloudSchema = z
     path: ['confirmPassword'],
   })
 
-/** الدخول على الجهاز: رقم الهاتف (أو البريد) + كلمة المرور */
+/** فتح حساب على الجهاز: رقم الهاتف وحده (بلا كلمة مرور) */
 export const deviceSignInSchema = z.object({
-  identifier: z.string().trim().min(1, { message: 'أدخل رقم الهاتف' }),
-  password: z.string().min(1, { message: 'أدخل كلمة المرور' }),
+  identifier: requiredPhoneField,
 })
-
-/** استعادة كلمة المرور على الجهاز: التحقق من رقم الهاتف ثم تعيين كلمة جديدة */
-export const resetDevicePasswordSchema = z
-  .object({
-    phone: requiredPhoneField,
-    password: passwordSchema,
-    confirmPassword,
-  })
-  .refine((v) => v.password === v.confirmPassword, {
-    message: 'كلمتا المرور غير متطابقتين',
-    path: ['confirmPassword'],
-  })
 
 /* --- رمز الربط --- */
 export const linkCodeSchema = z

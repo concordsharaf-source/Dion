@@ -4,6 +4,7 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { WifiOff } from 'lucide-react'
 import { queryClient } from './queryClient'
 import { BootSplash, DataSourceProvider } from './DataSourceProvider'
+import { EmailLinkGate } from './EmailLinkGate'
 import { useProfile, useSession } from './hooks/useAuth'
 import { rememberPendingRoute } from './pendingRoute'
 import { ToastProvider, useToast } from '@/components/ui'
@@ -226,9 +227,11 @@ export function App() {
           <ToastProvider>
             <OfflineBanner />
             <BackupWatcher />
-            <AppLockGate>
-              <RouterProvider router={router} />
-            </AppLockGate>
+            <EmailLinkGate>
+              <AppLockGate>
+                <RouterProvider router={router} />
+              </AppLockGate>
+            </EmailLinkGate>
           </ToastProvider>
         </DataSourceProvider>
       </QueryClientProvider>

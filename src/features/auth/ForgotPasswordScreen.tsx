@@ -2,15 +2,18 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { KeyRound, Mail } from 'lucide-react'
 import { Button, Card, Field, Input, useToast } from '@/components/ui'
+import { DesignCredit } from '@/components/DesignCredit'
 import { useAuth } from '@/app/hooks/useAuth'
 import { useDataSourceKind } from '@/app/DataSourceProvider'
-import { normalizePhoneNumber, resetDevicePasswordSchema, emailSchema, validate } from '@/core/validation'
+import { deviceSignInSchema, normalizePhoneNumber, emailSchema, validate } from '@/core/validation'
 import { toUserMessage } from '@/core/errors'
+import { consumePendingRoute } from '@/app/pendingRoute'
 
 /**
- * استعادة كلمة المرور.
- * على هذا الجهاز: التحقق من رقم الهاتف المسجّل ثم تعيين كلمة مرور جديدة.
- * في الوضع السحابي: يُرسَل رابط الاستعادة إلى البريد الإلكتروني (Supabase).
+ * «هل نسيت كلمة المرور؟»
+ *
+ * وضع الجهاز: لا توجد كلمة مرور أصلًا — الرقم وحده يفتح الحساب (وإن كان الرقم جديدًا
+ * نبدأ حسابًا جديدًا مباشرة). الوضع السحابي: يُرسَل رابط استعادة إلى البريد.
  */
 export function ForgotPasswordScreen() {
   const navigate = useNavigate()
@@ -20,8 +23,6 @@ export function ForgotPasswordScreen() {
 
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
@@ -47,23 +48,18 @@ export function ForgotPasswordScreen() {
       return
     }
 
-    const result = validate(resetDevicePasswordSchema, {
-      phone,
-      password,
-      confirmPassword: confirm,
-    })
+    const result = validate(deviceSignInSchema, { identifier: phone })
     if (!result.success) {
-      setErrors(result.errors)
+      setErrors({ phone: result.errors.identifier ?? 'رقم الهاتف غير صحيح' })
       return
     }
-    const data = result.data!
     setErrors({})
     setBusy(true)
     try {
-      const normalized = normalizePhoneNumber(data.phone) ?? data.phone
-      await auth.resetDevicePassword(normalized, data.password)
-      toast.show('تم تعيين كلمة المرور الجديدة — سجّل الدخول بها الآن')
-      navigate('/signin', { replace: true })
+      const normalized = normalizePhoneNumber(result.data!.identifier) ?? result.data!.identifier
+      await auth.openDeviceAccount(normalized)
+      toast.show('تم فتح دفترك — مرحبًا بعودتك')
+      navigate(consumePendingRoute(), { replace: true })
     } catch (e) {
       setErrors({ _: toUserMessage(e) })
     } finally {
@@ -81,7 +77,7 @@ export function ForgotPasswordScreen() {
         <p className="mt-1 text-[0.8125rem] leading-6 text-ink-500">
           {kind !== 'local'
             ? 'أدخل بريدك وسنرسل لك رابطًا لتعيين كلمة مرور جديدة.'
-            : 'أدخل رقم هاتفك المسجّل على هذا الجهاز ثم اختر كلمة مرور جديدة.'}
+            : 'في حساب هذا الجهاز لا توجد كلمة مرور — أدخل رقم هاتفك لفتح دفترك مباشرة.'}
         </p>
       </div>
 
@@ -110,7 +106,13 @@ export function ForgotPasswordScreen() {
             </Field>
           ) : (
             <>
-              <Field label="رقم الهاتف" required error={errors.phone} htmlFor="forgot-phone">
+              <Field
+                label="رقم الهاتف"
+                required
+                error={errors.phone}
+                hint="نفس الرقم المسجّل على هذا الجهاز"
+                htmlFor="forgot-phone"
+              >
                 <Input
                   id="forgot-phone"
                   type="tel"
@@ -122,34 +124,9 @@ export function ForgotPasswordScreen() {
                   placeholder="777 123 456"
                 />
               </Field>
-              <Field
-                label="كلمة المرور الجديدة"
-                required
-                error={errors.password}
-                hint="4 خانات على الأقل — أرقام أو حروف كما تريد"
-                htmlFor="forgot-password"
-              >
-                <Input
-                  id="forgot-password"
-                  type="password"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </Field>
-              <Field label="تأكيد كلمة المرور" required error={errors.confirmPassword} htmlFor="forgot-confirm">
-                <Input
-                  id="forgot-confirm"
-                  type="password"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                />
-              </Field>
               <p className="text-[0.6875rem] leading-5 text-ink-500">
-                تُحفظ كلمة المرور على هذا الجهاز فقط. لا يمكن لأحد استرجاع بياناتك من دون الوصول إليه.
+                بياناتك محفوظة على هذا الجهاز، وفتح الحساب بالرقم لا يحذف شيئًا. وإن أدخلت رقمًا جديدًا
+                ستحتاج إلى إنشاء حساب به من شاشة البداية.
               </p>
             </>
           )}
@@ -157,14 +134,16 @@ export function ForgotPasswordScreen() {
         </Card>
       )}
 
-      <div className="mt-6 space-y-3 pb-8">
+      <div className="mt-6 space-y-2">
         <Button block size="lg" loading={busy} onClick={submit}>
-          {kind !== 'local' ? 'أرسل رابط الاستعادة' : 'تعيين كلمة المرور'}
+          {kind !== 'local' ? 'أرسل رابط الاستعادة' : 'افتح دفتري'}
         </Button>
         <Link to="/signin" className="block py-2 text-center text-[0.8125rem] font-bold text-brand-600 underline">
           العودة لتسجيل الدخول
         </Link>
       </div>
+
+      <DesignCredit className="mt-auto py-6" />
     </div>
   )
 }

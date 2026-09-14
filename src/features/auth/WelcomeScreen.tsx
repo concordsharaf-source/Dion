@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Store, User, ShieldCheck, WifiOff, Link2 } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
+import { DesignCredit } from '@/components/DesignCredit'
 import { useDataSourceKind } from '@/app/DataSourceProvider'
 import type { Role } from '@/core/domain'
 
@@ -13,6 +15,7 @@ export function WelcomeScreen() {
   const navigate = useNavigate()
   const kind = useDataSourceKind()
   const toast = useToast()
+  const [role, setRole] = useState<Role | null>(null)
 
   const continueWith = (role: Role) => {
     navigate(kind === 'local' ? `/setup?role=${role}` : `/signup?role=${role}`)
@@ -64,25 +67,38 @@ export function WelcomeScreen() {
       </div>
 
       <div className="space-y-3">
-        <p className="text-center text-[0.8125rem] font-bold text-ink-600 dark:text-ink-300">اختر نوع حسابك</p>
+        <p id="role-label" className="text-center text-[0.8125rem] font-bold text-ink-600 dark:text-ink-300">
+          اختر نوع حسابك
+        </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          {roles.map((role) => (
-            <button
-              key={role.value}
-              type="button"
-              aria-label={`أنا ${role.label}`}
-              onClick={() => continueWith(role.value)}
-              className={`card flex flex-col items-center gap-2 border-2 border-transparent p-4 text-center transition active:scale-[0.98] ${role.ring}`}
-            >
-              <span className={`grid h-14 w-14 place-items-center rounded-2xl ${role.tile}`}>
-                <role.icon size={28} />
-              </span>
-              <span className="text-[0.9375rem] font-extrabold">أنا {role.label}</span>
-              <span className="text-[0.6875rem] leading-5 text-ink-500">{role.hint}</span>
-            </button>
-          ))}
+        <div role="radiogroup" aria-labelledby="role-label" className="grid grid-cols-2 gap-3">
+          {roles.map((item) => {
+            const selected = role === item.value
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={`أنا ${item.label}`}
+                onClick={() => setRole(item.value)}
+                className={`card flex flex-col items-center gap-2 border-2 p-4 text-center transition active:scale-[0.98] ${
+                  selected ? item.ring : 'border-transparent'
+                }`}
+              >
+                <span className={`grid h-14 w-14 place-items-center rounded-2xl ${item.tile}`}>
+                  <item.icon size={28} />
+                </span>
+                <span className="text-[0.9375rem] font-extrabold">أنا {item.label}</span>
+                <span className="text-[0.6875rem] leading-5 text-ink-500">{item.hint}</span>
+              </button>
+            )
+          })}
         </div>
+
+        <Button block size="lg" disabled={!role} onClick={() => role && continueWith(role)}>
+          متابعة
+        </Button>
 
         {kind === 'local' ? (
           <p className="px-2 pt-1 text-center text-[0.6875rem] leading-5 text-ink-500">
@@ -103,6 +119,8 @@ export function WelcomeScreen() {
           كيف أثبّت التطبيق على الجوال؟
         </button>
       </div>
+
+      <DesignCredit className="pt-5" />
     </div>
   )
 }

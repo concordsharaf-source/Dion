@@ -12,6 +12,7 @@
  */
 
 import type { BackupPayload } from '@/core/backup'
+import type { EmailLinkType } from '@/core/emailLink'
 import type {
   AppNotification,
   BalanceProposal,
@@ -109,21 +110,21 @@ export interface AuthPort {
   /** دخول بحساب محفوظ على هذا الجهاز بلا كلمة مرور (وضع الدفتر المحلي) */
   signInAsDeviceAccount?(accountId: string): Promise<AuthSession>
   /**
-   * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
-   * تبقى البيانات محفوظة على الجهاز، ويستطيع المستخدم الدخول بها بعد الخروج.
+   * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف (بلا كلمة مرور).
+   * تبقى البيانات محفوظة على الجهاز، ويُفتح الحساب لاحقًا بالرقم نفسه.
    */
-  signUpDevice?(input: { fullName: string; phone: string; password: string; role: Role }): Promise<AuthSession>
-  /** دخول برقم الهاتف (أو البريد) وكلمة المرور لحساب محفوظ على هذا الجهاز */
-  signInDevice?(input: { identifier: string; password: string }): Promise<AuthSession>
-  /**
-   * استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل.
-   * (في الوضع السحابي تُستعاد عبر رابط يُرسل إلى البريد)
-   */
-  resetDevicePassword?(input: { phone: string; newPassword: string }): Promise<void>
+  signUpDevice?(input: { fullName: string; phone: string; role: Role }): Promise<AuthSession>
+  /** فتح حساب محفوظ على هذا الجهاز برقم الهاتف (بلا كلمة مرور) */
+  signInDevice?(input: { identifier: string }): Promise<AuthSession>
   /** إرسال رابط استعادة كلمة المرور إلى البريد (الوضع السحابي) */
   resetPassword?(email: string): Promise<void>
-  /** هل يوجد حساب بهذا المعرّف على هذا الجهاز؟ (لتوجيه رسائل الاستعادة) */
-  findDeviceAccount?(identifier: string): Promise<DeviceAccount | null>
+  /**
+   * تأكيد رابط أُرسل إلى البريد (`?token_hash=…&type=…`) — الوضع السحابي فقط.
+   * يُرجع الجلسة بعد التحقق (وnull إن لم يُنشأ رمز الدخول).
+   */
+  verifyEmailLink?(params: { tokenHash: string; type: EmailLinkType }): Promise<AuthSession | null>
+  /** إعادة إرسال رابط تأكيد الحساب إلى البريد — الوضع السحابي فقط */
+  resendConfirmation?(email: string): Promise<void>
 }
 
 /** حساب محفوظ على الجهاز — للتبديل السريع وبلا كتابة كلمة المرور */

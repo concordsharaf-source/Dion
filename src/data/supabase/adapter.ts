@@ -12,7 +12,7 @@
  *   · منع الإرسال المزدوج: `client_ref` فريد لكل (منشئ، مرجع) على مستوى قاعدة البيانات.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { EmailOtpType, SupabaseClient } from '@supabase/supabase-js'
 import type {
   PushPort,
   StoredPushSubscription,
@@ -537,6 +537,44 @@ export class SupabaseDataSource implements DataSource {
       const { error } = await this.client.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/#/welcome`,
       })
+      if (error) mapError(error)
+    },
+
+    /**
+     * تأكيد رابط ورد بالبريد: الرابط يأتي بصيغة `?token_hash=…&type=…`
+     * (مضبوطة في قوالب البريد العربية) لأن التطبيق بتوجيه الهاش.
+     */
+    verifyEmailLink: async ({ tokenHash, type }) => {
+      const { data, error } = await this.client.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as EmailOtpType,
+      })
+      if (error) mapError(error)
+      const user = data.user
+      const session = data.session
+      if (!user || !session) return null
+      this.userId = user.id
+      // أول دخول بعد تأكيد البريد: ننشئ الملف الشخصي من بيانات التسجيل بلا إعادة كتابة
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; role?: Role; phone?: string | null }
+      const existing = await this.client.from('profiles').select('id').eq('id', user.id).maybeSingle()
+      if (!existing.error && !existing.data) {
+        await this.client.from('profiles').upsert(
+          {
+            id: user.id,
+            full_name: meta.full_name?.trim() || 'مستخدم جديد',
+            role: meta.role === 'merchant' ? 'merchant' : 'customer',
+            currency: 'YER',
+            phone: meta.phone ?? null,
+          },
+          { onConflict: 'id' },
+        )
+      }
+      return { userId: user.id, email: user.email ?? null, createdAt: user.created_at ?? new Date().toISOString() }
+    },
+
+    /** إعادة إرسال رسالة تأكيد الحساب */
+    resendConfirmation: async (email: string) => {
+      const { error } = await this.client.auth.resend({ type: 'signup', email })
       if (error) mapError(error)
     },
 

@@ -92,6 +92,20 @@ function readSessionUserId(): string | null {
   }
 }
 
+/* ============================ مساعدات الأرقام ============================ */
+
+/**
+ * توحيد رقمين للمقارنة: يتجاهل مفتاح الدولة والصفر في البداية.
+ * يمنع فشل فتح الحساب لمن سجّل رقمه سابقًا بصيغة `+967…` أو `0…`.
+ */
+function samePhone(stored: string | null | undefined, needle: string | null): boolean {
+  if (!stored || !needle) return false
+  const a = normalizePhoneNumber(stored)
+  const b = normalizePhoneNumber(needle)
+  if (!a || !b) return false
+  return a === b
+}
+
 /* ============================ أنواع داخلية ============================ */
 
 /** حقول العملية الجديدة: الحقول المُدارة تُملأ تلقائيًا */
@@ -458,24 +472,22 @@ export class LocalDataSource implements DataSource {
     },
 
     /**
-     * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
-     * تُحفظ بيانات الدخول (هاتف + كلمة مرور مشفّرة) وبيانات المستخدم،
-     * فيستطيع الدخول بعد تسجيل الخروج ويرى دفتره كما تركه.
+     * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف فقط (بلا كلمة مرور).
+     * يُحفظ الحساب ليُفتح لاحقًا بالرقم نفسه، فيدخل صاحبه بلا إعادة كتابة أي بيانات.
      */
-    signUpDevice: async ({ fullName, phone, password, role }) => {
+    signUpDevice: async ({ fullName, phone, role }) => {
       const db = await getDB()
       const normalizedPhone = normalizePhoneNumber(phone)
       if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
 
       const users = (await db.getAll('users')) as UserRow[]
-      if (users.some((u) => u.phone === normalizedPhone)) {
+      if (users.some((u) => samePhone(u.phone, normalizedPhone))) {
         throw appError('conflict', undefined, 'رقم الهاتف مسجّل مسبقًا على هذا الجهاز.')
       }
 
       const id = uuid()
       const email = `device-${id.slice(0, 8)}@local`
-      const { hash, salt } = await hashPassword(password)
-      const user: UserRow = { id, email, passwordHash: hash, salt, phone: normalizedPhone, createdAt: nowISO() }
+      const user: UserRow = { id, email, passwordHash: '', salt: '', phone: normalizedPhone, createdAt: nowISO() }
       await db.put('users', user)
 
       const profile: Profile = {
@@ -504,18 +516,26 @@ export class LocalDataSource implements DataSource {
       return session
     },
 
-    /** دخول برقم الهاتف (أو البريد) وكلمة المرور — لحساب محفوظ على هذا الجهاز */
-    signInDevice: async ({ identifier, password }) => {
+    /**
+     * فتح حساب محفوظ على هذا الجهاز برقم الهاتف (بلا كلمة مرور).
+     * البيانات محفوظة فيه أصلًا، فالرقم وحده يكفي للعودة إلى الدفتر كما تُرك.
+     */
+    signInDevice: async ({ identifier }) => {
       const db = await getDB()
       const needle = identifier.trim().toLowerCase()
       const phone = normalizePhoneNumber(identifier)
       const users = (await db.getAll('users')) as UserRow[]
+      // المقارنة بعد التوحيد: تقبل الأرقام القديمة المحفوظة بمفتاح دولة أو بصفر البداية
       const user = users.find(
-        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
+        (u) => samePhone(u.phone, phone) || (u.email ? u.email.toLowerCase() === needle : false),
       )
-      if (!user) throw appError('unauthorized', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
-      const ok = await verifyPassword(password, user.passwordHash, user.salt)
-      if (!ok) throw appError('unauthorized', undefined, 'كلمة المرور غير صحيحة.')
+      if (!user) throw appError('not_found', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      if (phone && user.phone !== phone) {
+        // ترحيل هادئ: نُخزّن الرقم بصيغته المحلية الموحّدة (بلا مفتاح دولة)
+        await db.put('users', { ...user, phone })
+        const profile = (await db.get('profiles', user.id)) as unknown as { id: string } | undefined
+        if (profile) await db.put('profiles', { ...profile, phone })
+      }
 
       const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
       try {
@@ -526,39 +546,6 @@ export class LocalDataSource implements DataSource {
       }
       this.authListeners.forEach((cb) => cb(session))
       return session
-    },
-
-    /** استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل */
-    resetDevicePassword: async ({ phone, newPassword }) => {
-      const normalizedPhone = normalizePhoneNumber(phone)
-      if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
-      const db = await getDB()
-      const users = (await db.getAll('users')) as UserRow[]
-      const user = users.find((u) => u.phone === normalizedPhone)
-      if (!user) throw appError('not_found', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
-      const { hash, salt } = await hashPassword(newPassword)
-      await db.put('users', { ...user, passwordHash: hash, salt })
-    },
-
-    /** بحث سريع عن حساب على هذا الجهاز (لتوجيه رسائل الاستعادة) */
-    findDeviceAccount: async (identifier: string) => {
-      const db = await getDB()
-      const needle = identifier.trim().toLowerCase()
-      const phone = normalizePhoneNumber(identifier)
-      const users = (await db.getAll('users')) as UserRow[]
-      const user = users.find(
-        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
-      )
-      if (!user) return null
-      const profile = (await db.get('profiles', user.id)) as unknown as Profile | undefined
-      return {
-        id: user.id,
-        fullName: profile?.fullName ?? '',
-        role: profile?.role ?? 'customer',
-        createdAt: user.createdAt,
-        phone: user.phone ?? null,
-        email: user.email,
-      }
     },
 
     /** قائمة الحسابات المحفوظة على هذا الجهاز — لإتاحة الدخول بعد الخروج */

@@ -56,11 +56,10 @@ describe('بطاقة تواصل مع المصمم', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(await screen.findByRole('button', { name: 'أنا عميل' }, { timeout: 8000 }))
+    await user.click(await screen.findByRole('radio', { name: 'أنا عميل' }, { timeout: 8000 }))
+    await user.click(screen.getByRole('button', { name: 'متابعة' }))
     await user.type(await screen.findByLabelText(/^الاسم/), 'أحمد محمد')
     await user.type(screen.getByLabelText(/^رقم الهاتف/), '777123456')
-    await user.type(screen.getByLabelText(/^كلمة المرور/), '1234')
-    await user.type(screen.getByLabelText(/^تأكيد كلمة المرور/), '1234')
     await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
     await screen.findByText('إجمالي المتبقي عليك', undefined, { timeout: 8000 })
 

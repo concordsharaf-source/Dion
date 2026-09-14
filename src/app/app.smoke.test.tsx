@@ -39,14 +39,12 @@ async function startBook(role: 'عميل' | 'تاجر', name: string) {
   const user = userEvent.setup()
   render(<App />)
 
-  const roleButton = await screen.findByRole('button', { name: new RegExp(`أنا ${role}`) }, { timeout: 8000 })
-  await user.click(roleButton)
+  await user.click(await screen.findByRole('radio', { name: new RegExp(`أنا ${role}`) }, { timeout: 8000 }))
+  await user.click(screen.getByRole('button', { name: 'متابعة' }))
 
   const nameInput = await screen.findByLabelText(/^الاسم/)
   await user.type(nameInput, name)
   await user.type(screen.getByLabelText(/^رقم الهاتف/), '777123456')
-  await user.type(screen.getByLabelText(/^كلمة المرور/), 'pass1234')
-  await user.type(screen.getByLabelText(/^تأكيد كلمة المرور/), 'pass1234')
   await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
 
   await waitFor(() => expect(screen.queryByText('مرحبًا بك في دفترك')).not.toBeInTheDocument(), { timeout: 5000 })

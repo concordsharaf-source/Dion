@@ -45,11 +45,10 @@ function pressBack() {
 
 /** ينشئ دفترًا محليًا ويصل إلى الرئيسية */
 async function openBook(user: User) {
-  await user.click(await screen.findByRole('button', { name: 'أنا عميل' }, { timeout: 8000 }))
+  await user.click(await screen.findByRole('radio', { name: 'أنا عميل' }, { timeout: 8000 }))
+  await user.click(screen.getByRole('button', { name: 'متابعة' }))
   await user.type(await screen.findByLabelText(/^الاسم/), 'أحمد محمد')
   await user.type(screen.getByLabelText(/^رقم الهاتف/), '777123456')
-  await user.type(screen.getByLabelText(/^كلمة المرور/), 'pass1234')
-  await user.type(screen.getByLabelText(/^تأكيد كلمة المرور/), 'pass1234')
   await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
   await screen.findByText('إجمالي المتبقي عليك', undefined, { timeout: 8000 })
 }
