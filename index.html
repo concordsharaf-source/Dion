@@ -21,6 +21,9 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
+    <!-- بوابة التثبيت: شاشة الفرض على من يفتح التطبيق من المتصفح بدل النسخة المثبّتة -->
+    <link rel="stylesheet" href="/install-gate/style.css" />
+
     <!-- منع وميض التصميم الداكن قبل تحميل التطبيق -->
     <script>
       ;(function () {
@@ -32,10 +35,144 @@
       })()
     </script>
 
+    <!--
+      تصنيف وضع التشغيل قبل أول رسم (لا وميض ولا ومضة بوابة):
+        · «standalone» (تطبيق مثبّت) أو تجاوز صريح ← data-install-gate="app"  (يُعرض #app-content)
+        · غير ذلك ← data-install-gate="gate"                                    (تُعرض #install-screen)
+      أي خطأ هنا ⇒ "app": البوابة أداة تجربة استخدام، لا يجوز أن تسدّ باب الدفتر.
+      باقي المنطق (زر التثبيت + تعليمات iOS) في /install-gate/app.js
+    -->
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        try {
+          var query = null
+          try {
+            query = new URLSearchParams(location.search).get('installgate')
+          } catch (e) {}
+
+          var standalone = navigator.standalone === true
+          if (!standalone && window.matchMedia) {
+            var modes = ['standalone', 'minimal-ui', 'fullscreen', 'window-controls-overlay']
+            for (var i = 0; i < modes.length; i += 1) {
+              if (window.matchMedia('(display-mode: ' + modes[i] + ')').matches) {
+                standalone = true
+                break
+              }
+            }
+          }
+
+          var skipped = false
+          try {
+            skipped = window.sessionStorage.getItem('dafatar.install-gate-skip') === '1'
+          } catch (e) {}
+
+          var gating = query === 'off' || query === 'skip' ? false : query === 'force' ? true : !standalone && !skipped
+          root.setAttribute('data-install-gate', gating ? 'gate' : 'app')
+        } catch (e) {
+          root.setAttribute('data-install-gate', 'app')
+        }
+      })()
+    </script>
+
     <title>دفتر الديون</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- ===== بوابة التثبيت (تُعرض في وضع المتصفح فقط) ===== -->
+    <div id="install-screen" role="dialog" aria-modal="true" aria-labelledby="install-title">
+      <div class="install-card">
+        <span class="install-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+        </span>
+
+        <h1 id="install-title">ثبّت «دفتر الديون» أولًا</h1>
+        <p class="install-sub">
+          الدفتر يعمل كتطبيق على جهازك — بياناتك تبقى في جهازك، ويُفتح بلمسة واحدة من الشاشة الرئيسية.
+        </p>
+
+        <!-- زر التثبيت: يظهر فقط عند توفّر beforeinstallprompt (كروم/إيدج/بريف) -->
+        <button type="button" id="install-button" class="install-button" data-action="install" hidden>
+          <svg class="install-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          <span id="install-button-label">تثبيت التطبيق</span>
+        </button>
+
+        <!-- تعليمات iOS Safari (لا يوجد beforeinstallprompt هناك) -->
+        <div id="install-ios" class="install-steps" hidden>
+          <p class="install-steps-title">على آيفون/آيباد — من سفاري:</p>
+          <ol class="install-steps-list">
+            <li>
+              <span class="install-step-num">1</span>
+              <span class="install-step-text">
+                اضغط أيقونة
+                <strong>
+                  «مشاركة»
+                  <svg class="install-inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 16V4" />
+                    <path d="M8 8l4-4 4 4" />
+                    <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+                  </svg>
+                </strong>
+                في شريط أدوات سفاري أسفل الشاشة.
+              </span>
+            </li>
+            <li>
+              <span class="install-step-num">2</span>
+              <span class="install-step-text">
+                اختر
+                <strong>«إضافة إلى الشاشة الرئيسية»</strong>
+                (Add to Home Screen).
+              </span>
+            </li>
+            <li>
+              <span class="install-step-num">3</span>
+              <span class="install-step-text">
+                اضغط
+                <strong>«إضافة»</strong>
+                ثم افتح التطبيق من أيقونته في الشاشة الرئيسية.
+              </span>
+            </li>
+          </ol>
+        </div>
+
+        <!-- متصفحات بلا دعم التثبيت التلقائي (فايرفوكس…): تعليمات من قائمة المتصفح -->
+        <div id="install-manual" class="install-note" hidden>
+          <p>
+            تثبيت التطبيق غير متاح تلقائيًا في هذا المتصفح. أضِفه من قائمة المتصفح:
+            <strong>⋮ / ☰ ← «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»</strong>
+            ثم افتحه من الشاشة الرئيسية.
+          </p>
+        </div>
+
+        <!-- بعد نجاح التثبيت: نطلب إعادة الفتح من الأيقونة -->
+        <div id="install-done" class="install-note install-note-ok" hidden>
+          <p>تم التثبيت بنجاح ✅ — افتح «دفتر الديون» من أيقونته في الشاشة الرئيسية.</p>
+        </div>
+
+        <p id="install-status" class="install-status" role="status" aria-live="polite"></p>
+
+        <button type="button" id="install-reload" class="install-link" data-action="reload" hidden>
+          ثبّتُه؟ افتح التطبيق من الشاشة الرئيسية — أو اضغط هنا للتحديث
+        </button>
+
+        <!-- مخرج اختياري (CONFIG.allowSkip = false افتراضيًا، أو ?installgate=off) -->
+        <button type="button" id="install-skip" class="install-link" data-action="skip" hidden>المتابعة في المتصفح دون تثبيت</button>
+      </div>
+    </div>
+
+    <!-- ===== التطبيق ===== -->
+    <div id="app-content">
+      <div id="root"></div>
+    </div>
+
+    <script src="/install-gate/app.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

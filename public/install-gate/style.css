@@ -1,0 +1,356 @@
+/* =============================================================================
+   بوابة التثبيت (Install Gate) — stylesheet مستقل بالكامل
+   · لا يعتمد على Tailwind ولا على CSS التطبيق: يجب أن يُرسم قبل أن يُحمَّل React
+   · كل الأبعاد بالـ logical properties حتى يصحّ الشكل في RTL و LTR
+   · القاعدة الحاكمة: أي خطأ/تعطّل للسكربت ⇒ التطبيق ظاهر والبوابة مخفية
+   ============================================================================= */
+
+:root {
+  --ig-brand: #0f7a5a;
+  --ig-brand-strong: #0c6149;
+  --ig-brand-soft: #d6f5e4;
+  --ig-page: #0b1220;
+  --ig-card: #ffffff;
+  --ig-muted: #5c6b78;
+  --ig-line: #e6eaee;
+  --ig-text: #101922;
+  --ig-shadow: 0 24px 60px -24px rgb(4 36 30 / 0.45);
+  --ig-safe-top: env(safe-area-inset-top, 0px);
+  --ig-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ig-card: #131c2b;
+    --ig-muted: #a9b6c4;
+    --ig-line: #223045;
+    --ig-text: #eef4f8;
+    --ig-brand-soft: #0b4d3b;
+  }
+}
+
+/* الوضع الداكن داخل التطبيق (html.dark) — نفس لوحة الألوان */
+html.dark {
+  --ig-card: #131c2b;
+  --ig-muted: #a9b6c4;
+  --ig-line: #223045;
+  --ig-text: #eef4f8;
+  --ig-brand-soft: #0b4d3b;
+}
+
+/* الخط نفسه المستخدم في التطبيق (ملفات محلية ⇒ تعمل بلا اتصال) */
+@font-face {
+  font-family: 'Cairo Gate';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url(/fonts/cairo-arabic.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+200C-200E, U+2010-2011, U+2E41, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: 'Cairo Gate';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url(/fonts/cairo-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F, U+2122;
+}
+
+/* ============================ 1) الحاويات ============================ */
+
+/* #root كان يعتمد على سلسلة min-height في CSS التطبيق — نُبقيها سليمة */
+#app-content {
+  min-height: 100%;
+}
+
+/* وضع البوابة: التطبيق مخفيّ وغير قابل للتركيز */
+html[data-install-gate='gate'] #app-content {
+  display: none !important;
+}
+
+html[data-install-gate='gate'] {
+  overflow: hidden;
+}
+
+html[data-install-gate='gate'] body {
+  overflow: hidden;
+}
+
+/*
+   البوابة نفسها: ظهورها مرتبط بخاصية data-install-gate وحدها (تُضبط في index.html
+   قبل أول رسم) — لا ننتظر app.js: لو تعطّل السكربت أو تعذّرت تلافيته يبقى
+   المستخدم أمام شاشة التعليمات، لا أمام صفحة بيضاء.
+*/
+#install-screen {
+  display: none;
+}
+
+html[data-install-gate='gate'] #install-screen {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: calc(1.25rem + var(--ig-safe-top)) 1.125rem calc(1.25rem + var(--ig-safe-bottom));
+  overflow-y: auto;
+  background:
+    radial-gradient(120% 80% at 50% 0%, #12a37a 0%, transparent 60%),
+    linear-gradient(180deg, #0c6149 0%, var(--ig-page) 62%);
+  font-family: 'Cairo Gate', 'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ig-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================ 2) البطاقة ============================ */
+
+.install-card {
+  box-sizing: border-box;
+  inline-size: min(30rem, 100%);
+  margin: auto;
+  padding: 1.75rem 1.375rem 1.5rem;
+  text-align: center;
+  background: var(--ig-card);
+  border: 1px solid var(--ig-line);
+  border-radius: 1.75rem;
+  box-shadow: var(--ig-shadow);
+  animation: ig-rise 0.32s ease-out both;
+}
+
+@keyframes ig-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-card {
+    animation: none;
+  }
+}
+
+.install-badge {
+  display: grid;
+  place-items: center;
+  inline-size: 4rem;
+  block-size: 4rem;
+  margin-inline: auto;
+  border-radius: 1.375rem;
+  background: var(--ig-brand);
+  color: #fff;
+  box-shadow: 0 14px 30px -14px rgb(15 122 90 / 0.7);
+}
+
+.install-badge svg {
+  inline-size: 2rem;
+  block-size: 2rem;
+}
+
+.install-card h1 {
+  margin: 0.875rem 0 0;
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--ig-text);
+}
+
+.install-sub {
+  margin: 0.375rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--ig-muted);
+}
+
+/* ============================ 3) الزر والروابط ============================ */
+
+.install-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  margin-block-start: 1.25rem;
+  padding: 0.875rem 1rem;
+  border: 0;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, var(--ig-brand) 0%, var(--ig-brand-strong) 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+
+.install-button[hidden] {
+  display: none;
+}
+
+.install-button:hover {
+  filter: brightness(1.05);
+}
+
+.install-button:active {
+  transform: scale(0.985);
+}
+
+.install-button:focus-visible {
+  outline: 3px solid #7bd6ae;
+  outline-offset: 2px;
+}
+
+.install-button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.install-button-icon {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: none;
+}
+
+.install-link {
+  inline-size: 100%;
+  margin-block-start: 0.875rem;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--ig-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.install-link[hidden] {
+  display: none;
+}
+
+.install-link:hover {
+  color: var(--ig-brand);
+}
+
+/* ============================ 4) تعليمات iOS ============================ */
+
+.install-steps {
+  margin-block-start: 1.25rem;
+  text-align: start;
+}
+
+.install-steps[hidden] {
+  display: none;
+}
+
+.install-steps-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--ig-text);
+}
+
+.install-steps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.install-steps-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  background: color-mix(in srgb, var(--ig-brand-soft) 45%, transparent);
+  border: 1px solid var(--ig-line);
+  border-radius: 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--ig-text);
+}
+
+/* fallback لمتصفحات بلا color-mix (iOS < 16.2) */
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+  .install-steps-list li {
+    background: var(--ig-brand-soft);
+  }
+}
+
+.install-step-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  margin-block-start: 0.0625rem;
+  border-radius: 0.5rem;
+  background: var(--ig-brand);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.install-step-text {
+  flex: 1 1 auto;
+}
+
+.install-step-text strong {
+  font-weight: 800;
+}
+
+.install-inline-icon {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  vertical-align: -0.125rem;
+}
+
+/* ============================ 5) ملاحظات وحالة ============================ */
+
+.install-note {
+  margin-block-start: 1rem;
+  padding: 0.75rem 0.875rem;
+  text-align: start;
+  background: color-mix(in srgb, var(--ig-brand-soft) 40%, transparent);
+  border: 1px dashed var(--ig-line);
+  border-radius: 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1.7;
+  color: var(--ig-muted);
+}
+
+.install-note[hidden] {
+  display: none;
+}
+
+.install-note p {
+  margin: 0;
+}
+
+.install-note-ok {
+  border-style: solid;
+  border-color: var(--ig-brand);
+  color: var(--ig-text);
+  font-weight: 700;
+}
+
+.install-status {
+  min-block-size: 1rem;
+  margin: 0.625rem 0 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ig-brand);
+}
+
+.install-status[hidden] {
+  display: none;
+}

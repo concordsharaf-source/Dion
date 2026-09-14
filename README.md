@@ -98,6 +98,18 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 - **في وضع التطوير:** يُزال أي Service Worker قديم وتُفرَّغ الكاشات تلقائيًا، فما تراه في المعاينة هو آخر تعديل دائمًا.
 - عند الانقطاع: التنقّل يعمل من كاش `app-shell` (NetworkFirst بمهلة 4 ثوانٍ)، والملفات من precache، والعمليات غير المرسلة تبقى في الطابور بانتظار المزامنة.
 
+## بوابة التثبيت (لا يُفتح الدفتر من المتصفح)
+
+- **الملفات:** `index.html` (حاويتان + تصنيف قبل أول رسم) · `public/install-gate/style.css` · `public/install-gate/app.js` — HTML/CSS/JS قياسي بلا أي مكتبة، ولا يعتمد على CSS التطبيق.
+- **كشف الحالة:** `display-mode: standalone|minimal-ui|fullscreen|window-controls-overlay` أو `navigator.standalone` ⇒ التطبيق مثبّت: يُعرض `#app-content` وتُخفى `#install-screen`. غير ذلك ⇒ يُخفى `#app-content` (مع `inert` + `aria-hidden`) وتُعرض `#install-screen`.
+- **كروم/إيدج/بريف:** يُلتقط `beforeinstallprompt` (مع `preventDefault` لحرمان المتصفح من بانره) ويُربط بزر `#install-button`؛ `prompt()` يُستخدم مرة واحدة، ثم تُعرض لوحة «تم التثبيت — افتح من الشاشة الرئيسية».
+- **iOS Safari:** لا `beforeinstallprompt` ⇒ الزر مخفي وتظهر ثلاث خطوات مرقّمة: «مشاركة» ← «إضافة إلى الشاشة الرئيسية» ← «إضافة». نميّز سفاري الأصلية بوسم `Version/…Safari` (كل متصفحات iOS WebKit)؛ والمتصفحات داخل التطبيقات وفايرفوكس تأخذ الدليل اليدوي.
+- **إعادة التصنيف عند «الدخول» فقط:** `visibilitychange` / `pageshow` / `focus` / تغيّر `display-mode` / `appinstalled` — بلا أي نافذة منبثقة أثناء الاستخدام.
+- **لا شاشة بيضاء:** ظهور البوابة مربوط بخاصية `data-install-gate` التي يضبطها سكربت مصغّر في `<head>` قبل أول رسم؛ وأي استثناء في `app.js` أو تعطّله ⇒ `data-install-gate="app"` (التطبيق يعمل).
+- **مفاتيح التحكّم:** `?installgate=off` (تجاهل البوابة لهذه الجلسة، تُخزَّن في `sessionStorage`) · `?installgate=force` (اختبار الشاشة في وضع standalone) · `CONFIG.allowSkip` في `app.js` إن أردت رابط «المتابعة في المتصفح» للجميع.
+- **منطق البوابة مُختبَر:** `src/app/installGate.test.ts` (14 اختبارًا) يقيّم `public/install-gate/app.js` نفسه داخل jsdom ويقلّب: standalone، iOS، معامِلات الرابط، وربط `beforeinstallprompt`.
+- **ملاحظة نشر:** الأصول بمسارات مطلقة (`/install-gate/…`) — إن نُشر المشروع في مسار فرعي فاستخدم `base` في `vite.config.ts` وروابط نسبية.
+
 ## استيراد من جهات الاتصال
 
 بجانب حقل رقم الهاتف في نموذج إضافة/تعديل العميل أو المحل:
