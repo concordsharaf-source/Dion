@@ -2,10 +2,10 @@
  * شاشة قفل التطبيق:
  *   · القفل بالبصمة ⇐ **شاشة فارغة تمامًا** (بلا أيقونة وبلا زر وبلا نص):
  *     نكتفي بنافذة البصمة التي يُظهرها الجهاز/المتصفح نفسه (WebAuthn).
- *   · إذا أُلغيت المطالبة أو لم تُقرأ البصمة ⇐ نعيد طلبها تلقائيًا (بلا ضغط أي زر،
- *     وعند كل عودة للتطبيق) حتى MAX_BIOMETRIC_ATTEMPTS محاولات.
- *   · بعد استنفاد المحاولات — أو إذا كانت البصمة غير متاحة على هذا الجهاز أصلًا —
- *     يظهر الباترن الاحتياطي حتى لا يبقى المستخدم عالقًا خارج دفتره.
+ *   · المطالبة تتم **مرة واحدة عند الدخول فقط** (عند ظهور القفل): لا إعادة طلب
+ *     تلقائية ولا تذكير أثناء استخدام التطبيق — لو أُلغيت المطالبة أو فشلت
+ *     يظهر الباترن، ومن يرد البصمة مرة أخرى يضغط «إعادة المحاولة بالبصمة».
+ *   · البصمة غير متاحة على الجهاز أصلًا ⇐ الباترن مباشرة.
  *   · القفل بالباترن وحده ⇐ لوحة الباترن مباشرة.
  */
 
@@ -22,20 +22,14 @@ import {
 import { verifyBiometric } from '@/services/biometric'
 import { Avatar } from '@/components/ui'
 
-/** عدد مرات إعادة طلب البصمة تلقائيًا قبل إظهار الباترن */
-export const MAX_BIOMETRIC_ATTEMPTS = 3
-
-/** مهلة قصيرة بين المطالبات المتتالية حتى لا نُغرق الجهاز بالطلبات */
-export const BIOMETRIC_RETRY_DELAY_MS = 600
-
-/** أسباب تعني أن البصمة لن تنجح على هذا الجهاز — لا فائدة من إعادة الطلب */
-const DEAD_END_REASONS = new Set(['unsupported', 'insecure-context', 'unavailable'])
-
 export function LockScreen({
   onUnlocked,
+  onPromptActiveChange,
   userName,
 }: {
   onUnlocked: () => void
+  /** تُبلَّغ الحارس أن نافذة البصمة مفتوحة كي لا يحسبها غيابًا ويُعيد القفل */
+  onPromptActiveChange?: (active: boolean) => void
   userName?: string | null
 }) {
   const [config] = useState<LockConfig>(() => readLockConfig())
@@ -43,37 +37,46 @@ export function LockScreen({
   const canBiometric = mode === 'biometric' && Boolean(readCredentialId())
 
   const [bioMessage, setBioMessage] = useState<string | null>(null)
-  /** في وضع البصمة نبقى على شاشة فارغة حتى تظهر رسالة «استخدم الباترن» */
-  const [showPattern, setShowPattern] = useState(!canBiometric)
+  /** 'prompt' = شاشة فارغة انتظارًا لنافذة الجهاز · 'pattern' = لوحة الباترن */
+  const [phase, setPhase] = useState<'prompt' | 'pattern'>(canBiometric ? 'prompt' : 'pattern')
   const [patternStatus, setPatternStatus] = useState<'idle' | 'error' | 'ok'>('idle')
   const [patternError, setPatternError] = useState<string | null>(null)
+  /** يزيدها المستخدم فقط (بزر إعادة المحاولة) — لا شيء يزيدها تلقائيًا */
   const [promptSeq, setPromptSeq] = useState(0)
 
-  const askingRef = useRef(false)
-  const attemptsRef = useRef(0)
   const doneRef = useRef(false)
+  const promptActiveRef = useRef(false)
 
-  /** يطلب البصمة من الجهاز — بلا أي واجهة داخل التطبيق وبلا ضغط زر */
+  const setPromptActive = useCallback(
+    (active: boolean) => {
+      promptActiveRef.current = active
+      onPromptActiveChange?.(active)
+    },
+    [onPromptActiveChange],
+  )
+
   const askBiometric = useCallback(() => setPromptSeq((n) => n + 1), [])
 
+  /* مطالبة واحدة لكل حلقة قفل: عند الظهور (أو عند أول طلب صريح من المستخدم) */
   useEffect(() => {
-    if (!canBiometric || showPattern || doneRef.current) return
+    if (!canBiometric || phase !== 'prompt' || doneRef.current) return
     const credentialId = readCredentialId()
     if (!credentialId) {
-      setShowPattern(true)
+      setPhase('pattern')
       return
     }
 
     let cancelled = false
-    let timer: number | null = null
-    askingRef.current = true
+    let onVisible: (() => void) | null = null
 
-    void (async () => {
+    const run = async () => {
+      setPromptActive(true)
       const result = await verifyBiometric(credentialId).catch(() => ({
         ok: false as const,
         reason: 'failed' as const,
         message: 'تعذّر الوصول إلى البصمة',
       }))
+      setPromptActive(false)
       if (cancelled || doneRef.current) return
 
       if (result.ok) {
@@ -82,44 +85,34 @@ export function LockScreen({
         return
       }
 
-      setBioMessage(result.message)
+      // لا إعادة طلب تلقائية: نكتفي بما عرضه الجهاز، والباترن هو المخرج
+      setBioMessage(
+        result.reason === 'cancelled' || result.reason === 'failed'
+          ? 'تعذّرت البصمة — استخدم الباترن'
+          : result.message,
+      )
+      setPhase('pattern')
+    }
 
-      // البصمة غير متاحة أصلًا ⇐ الباترن مباشرة (بلا حلقة إعادة طلب)
-      if (DEAD_END_REASONS.has(result.reason)) {
-        setShowPattern(true)
-        return
+    // لا نفتح نافذة البصمة والتطبيق في الخلفية (تُفتح عند الدخول فعلًا)
+    if (document.visibilityState === 'visible') {
+      void run()
+    } else {
+      onVisible = () => {
+        if (document.visibilityState !== 'visible' || !onVisible) return
+        document.removeEventListener('visibilitychange', onVisible)
+        onVisible = null
+        if (!cancelled && !doneRef.current) void run()
       }
-
-      attemptsRef.current += 1
-      if (attemptsRef.current >= MAX_BIOMETRIC_ATTEMPTS) {
-        setBioMessage('تعذّرت البصمة — استخدم الباترن')
-        setShowPattern(true)
-        return
-      }
-
-      // شاشة فارغة + إعادة الطلب تلقائيًا
-      timer = window.setTimeout(() => {
-        timer = null
-        askBiometric()
-      }, BIOMETRIC_RETRY_DELAY_MS)
-    })()
+      document.addEventListener('visibilitychange', onVisible)
+    }
 
     return () => {
       cancelled = true
-      askingRef.current = false
-      if (timer !== null) window.clearTimeout(timer)
+      if (onVisible) document.removeEventListener('visibilitychange', onVisible)
+      if (promptActiveRef.current) setPromptActive(false)
     }
-  }, [canBiometric, showPattern, promptSeq, askBiometric, onUnlocked])
-
-  // استعداد دائم: عند العودة للتطبيق نُعيد المطالبة (الشاشة تبقى فارغة)
-  useEffect(() => {
-    if (!canBiometric || showPattern) return
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && !askingRef.current) askBiometric()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [canBiometric, showPattern, askBiometric])
+  }, [canBiometric, phase, promptSeq, onUnlocked, setPromptActive])
 
   async function submitPattern(pattern: number[]) {
     const ok = await verifyPattern(pattern)
@@ -134,8 +127,8 @@ export function LockScreen({
     window.setTimeout(() => setPatternStatus('idle'), 600)
   }
 
-  /* ===== وضع البصمة: شاشة فارغة تمامًا — نكتفي بنافذة الجهاز ===== */
-  if (canBiometric && !showPattern) {
+  /* ===== انتظار البصمة: شاشة فارغة تمامًا — نكتفي بنافذة الجهاز ===== */
+  if (canBiometric && phase === 'prompt') {
     return (
       <div className="app-shell items-center justify-center">
         {/* للقارئ الشاشة فقط — لا شيء ظاهر على الشاشة */}
@@ -146,7 +139,7 @@ export function LockScreen({
     )
   }
 
-  /* ===== شاشة الباترن (أساسية، أو تراجع بعد تعذّر البصمة) ===== */
+  /* ===== شاشة الباترن (أساسية، أو بعد إلغاء/تعذّر البصمة) ===== */
   return (
     <div className="app-shell items-center justify-center px-6 pb-10 pt-14">
       <div className="mb-6 flex flex-col items-center text-center">
@@ -188,9 +181,8 @@ export function LockScreen({
           <button
             type="button"
             onClick={() => {
-              attemptsRef.current = 0
               setBioMessage(null)
-              setShowPattern(false)
+              setPhase('prompt')
               askBiometric()
             }}
             className="mt-3 w-full rounded-full bg-ink-200/70 px-3 py-2 text-[0.75rem] font-bold dark:bg-ink-800"
@@ -202,4 +194,3 @@ export function LockScreen({
     </div>
   )
 }
-
