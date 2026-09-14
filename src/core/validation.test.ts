@@ -5,6 +5,8 @@ import {
   normalizePhoneNumber,
   partySchema,
   passwordSchema,
+  signUpCloudSchema,
+  signUpDeviceSchema,
   sanitizeMultiline,
   sanitizeText,
   validate,
@@ -116,5 +118,58 @@ describe('كلمة المرور', () => {
     const r = passwordSchema.safeParse('123')
     expect(r.success).toBe(false)
     if (!r.success) expect(r.error.issues[0].message).toBe('كلمة المرور 4 خانات على الأقل')
+  })
+})
+
+describe('نموذج الحساب السحابي (بريد + كلمة مرور)', () => {
+  it('يقبل بيانات صحيحة', () => {
+    const result = validate(signUpCloudSchema, {
+      fullName: 'متجر النور',
+      email: 'owner@example.com',
+      phone: '771234567',
+      password: '1234',
+      confirmPassword: '1234',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('يرفض كلمتين غير متطابقتين', () => {
+    const result = validate(signUpCloudSchema, {
+      fullName: 'متجر النور',
+      email: 'owner@example.com',
+      phone: '771234567',
+      password: '1234',
+      confirmPassword: '12345',
+    })
+    expect(result.success).toBe(false)
+    expect(result.errors.confirmPassword).toContain('غير متطابقت')
+  })
+
+  it('يرفض كلمة مرور أقل من 4 خانات وبريدًا غير صحيح', () => {
+    const short = validate(signUpCloudSchema, {
+      fullName: 'أحمد',
+      email: 'a@b.com',
+      phone: '771234567',
+      password: '123',
+      confirmPassword: '123',
+    })
+    expect(short.success).toBe(false)
+    expect(short.errors.password).toContain('4')
+
+    const badEmail = validate(signUpCloudSchema, {
+      fullName: 'أحمد',
+      email: 'not-an-email',
+      phone: '771234567',
+      password: '1234',
+      confirmPassword: '1234',
+    })
+    expect(badEmail.success).toBe(false)
+    expect(badEmail.errors.email).toBeTruthy()
+  })
+
+  it('نموذج حساب الجهاز لا يطلب كلمة مرور أصلًا', () => {
+    const result = validate(signUpDeviceSchema, { fullName: 'أحمد محمد', phone: '0771234567' })
+    expect(result.success).toBe(true)
+    expect(Object.keys(result.data!)).toEqual(['fullName', 'phone'])
   })
 })
