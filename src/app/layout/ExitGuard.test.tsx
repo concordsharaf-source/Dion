@@ -49,6 +49,8 @@ async function openBook(user: User) {
   await user.click(screen.getByRole('button', { name: 'متابعة' }))
   await user.type(await screen.findByLabelText(/^الاسم/), 'أحمد محمد')
   await user.type(screen.getByLabelText(/^رقم الهاتف/), '777123456')
+  await user.type(screen.getByLabelText(/^كلمة المرور/), 'pass1234')
+  await user.type(screen.getByLabelText(/^تأكيد كلمة المرور/), 'pass1234')
   await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
   await screen.findByText('إجمالي المتبقي عليك', undefined, { timeout: 8000 })
 }

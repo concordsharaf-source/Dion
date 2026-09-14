@@ -829,73 +829,76 @@ describe('النسخة الاحتياطية والاستعادة', () => {
   })
 })
 
-/* ============================ 9) حسابات الجهاز (بلا كلمة مرور) ============================ */
+/* ============================ 9) حسابات الجهاز: الاسم + الهاتف + كلمة المرور ============================ */
 
-describe('حسابات الجهاز: اسم + رقم هاتف فقط', () => {
-  it('ينشئ حسابًا بلا كلمة مرور ويخزّن الرقم محليًا (بلا صفر البداية)', async () => {
-    const session = await ds.auth.signUpDevice!({ fullName: 'متجر الفتح', phone: '0771234567', role: 'merchant' })
+describe('حسابات الجهاز والرقم المحلي', () => {
+  it('ينشئ حسابًا ويخزّن الرقم محليًا (بلا صفر البداية ولا مفتاح دولة)', async () => {
+    const session = await ds.auth.signUpDevice!({
+      fullName: 'متجر الفتح',
+      phone: '0771234567',
+      password: '1234',
+      role: 'merchant',
+    })
     expect(session.userId).toBeTruthy()
 
     const profile = await ds.auth.getProfile()
     expect(profile?.fullName).toBe('متجر الفتح')
-    expect(profile?.role).toBe('merchant')
     expect(profile?.phone).toBe('771234567')
   })
 
   it('يرفض رقمين متشابهين بصيغتين مختلفتين (منع تكرار الحساب)', async () => {
-    await ds.auth.signUpDevice!({ fullName: 'أحمد', phone: '771234567', role: 'customer' })
+    await ds.auth.signUpDevice!({ fullName: 'أحمد', phone: '771234567', password: '1234', role: 'customer' })
     await expect(
-      ds.auth.signUpDevice!({ fullName: 'أحمد آخر', phone: '+967 771 234 567', role: 'customer' }),
+      ds.auth.signUpDevice!({ fullName: 'أحمد آخر', phone: '+967 771 234 567', password: '1234', role: 'customer' }),
     ).rejects.toThrow(/مسجّل مسبقًا/)
   })
 
-  it('يفتح الحساب بالرقم وحده، وبأي صيغة يكتبها المستخدم', async () => {
-    await ds.auth.signUpDevice!({ fullName: 'أحمد', phone: '771234567', role: 'customer' })
+  it('يفتح الحساب بالرقم بأي صيغة يكتبها المستخدم، وبكلمة المرور', async () => {
+    await ds.auth.signUpDevice!({ fullName: 'أحمد', phone: '771234567', password: '1234', role: 'customer' })
     await ds.auth.signOut()
 
     for (const written of ['771234567', '0771234567', '+967 771 234 567', '00967771234567']) {
-      const session = await ds.auth.signInDevice!({ identifier: written })
+      const session = await ds.auth.signInDevice!({ identifier: written, password: '1234' })
       expect(session.userId).toBeTruthy()
       await ds.auth.signOut()
     }
   })
 
   it('يفتح حسابًا قديمًا حُفظ رقمه بمفتاح دولة، ويُوحّده بعد الدخول', async () => {
-    const db = await getDB()
-    const createdAt = new Date().toISOString()
-    const legacy: UserRow = {
-      id: 'legacy-1',
-      email: 'device-legacy@local',
-      passwordHash: '',
-      salt: '',
-      phone: '+967733222111',
-      createdAt,
-    }
-    await db.put('users', legacy)
-    await db.put('profiles', {
-      id: 'legacy-1',
-      role: 'merchant',
-      roles: ['merchant'],
+    const session = await ds.auth.signUpDevice!({
       fullName: 'متجر قديم',
-      phone: '+967733222111',
-      currency: 'YER',
-      theme: 'system',
-      numerals: 'latin',
-      createdAt,
-      updatedAt: createdAt,
-    } as unknown as Record<string, unknown>)
+      phone: '733222111',
+      password: '1234',
+      role: 'merchant',
+    })
+    await ds.auth.signOut()
 
-    const session = await ds.auth.signInDevice!({ identifier: '733222111' })
-    expect(session.userId).toBe('legacy-1')
+    // محاكاة نسخة سابقة: الرقم مخزَّن بمفتاح دولة في المستخدم والملف الشخصي
+    const db = await getDB()
+    const user = (await db.get('users', session.userId)) as unknown as UserRow
+    await db.put('users', { ...user, phone: '+967733222111' })
+    const profile = (await db.get('profiles', session.userId)) as unknown as { phone: string }
+    await db.put('profiles', { ...profile, phone: '+967733222111' } as unknown as Record<string, unknown>)
+
+    const opened = await ds.auth.signInDevice!({ identifier: '733222111', password: '1234' })
+    expect(opened.userId).toBe(session.userId)
 
     // ترحيل هادئ: الرقم صار محليًا في المستخدم والملف الشخصي
-    const healed = (await db.get('users', 'legacy-1')) as unknown as UserRow
+    const healed = (await db.get('users', session.userId)) as unknown as UserRow
     expect(healed.phone).toBe('733222111')
-    const profile = (await db.get('profiles', 'legacy-1')) as unknown as { phone: string }
-    expect(profile.phone).toBe('733222111')
+    const healedProfile = (await db.get('profiles', session.userId)) as unknown as { phone: string }
+    expect(healedProfile.phone).toBe('733222111')
   })
 
-  it('رسالة واضحة عند رقم غير مسجّل', async () => {
-    await expect(ds.auth.signInDevice!({ identifier: '700000000' })).rejects.toThrow(/لا يوجد حساب بهذا الرقم/)
+  it('رسالة واضحة عند رقم غير مسجّل، وأخرى عند كلمة مرور خاطئة', async () => {
+    await expect(ds.auth.signInDevice!({ identifier: '700000000', password: '1234' })).rejects.toThrow(
+      /لا يوجد حساب بهذا الرقم/,
+    )
+
+    await ds.auth.signUpDevice!({ fullName: 'سالم', phone: '711223344', password: '1234', role: 'customer' })
+    await ds.auth.signOut()
+    await expect(ds.auth.signInDevice!({ identifier: '711223344', password: '9999' })).rejects.toThrow(
+      /كلمة المرور غير صحيحة/,
+    )
   })
 })

@@ -12,9 +12,9 @@ import { useDataSourceKind } from '@/app/DataSourceProvider'
 import { consumePendingRoute } from '@/app/pendingRoute'
 
 /**
- * إنشاء حساب: الاسم + رقم الهاتف (+ العملة).
- * بلا كلمة مرور في وضع الجهاز — الرقم وحده يكفي للدخول في كل مرة.
+ * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور وتأكيدها.
  * النوع (عميل/تاجر) يأتي من شاشة البداية — لا تُعاد أزرار النوع هنا.
+ * تُحفظ بيانات الدخول وبيانات المستخدم، فيعود إليها بعد تسجيل الخروج.
  */
 export function SetupScreen() {
   const [params] = useSearchParams()
@@ -26,12 +26,19 @@ export function SetupScreen() {
   const role = ((params.get('role') as Role | null) ?? 'customer') as Role
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
   async function submit() {
-    const result = validate(signUpDeviceSchema, { fullName: name, phone })
+    const result = validate(signUpDeviceSchema, {
+      fullName: name,
+      phone,
+      password,
+      confirmPassword: confirm,
+    })
     if (!result.success) {
       setErrors(result.errors)
       return
@@ -42,7 +49,7 @@ export function SetupScreen() {
     try {
       const normalized = normalizePhoneNumber(data.phone) ?? data.phone
       if (kind === 'local') {
-        await auth.signUpOnDevice({ fullName: data.fullName, phone: normalized, role })
+        await auth.signUpOnDevice({ fullName: data.fullName, phone: normalized, password: data.password, role })
         await auth.updateProfile({ currency })
         toast.show('تم إنشاء الحساب — دفترك جاهز')
       } else {
@@ -67,15 +74,16 @@ export function SetupScreen() {
         </p>
       </div>
 
-      <div className="flex flex-1 flex-col">
+      <div className="space-y-4">
         <Card className="space-y-4">
-          <Field label="الاسم" required error={errors.fullName} htmlFor="name">
+          <Field label="الاسم" required error={errors.fullName} htmlFor="fullname">
             <Input
-              id="name"
+              id="fullname"
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={role === 'merchant' ? 'مثال: متجر النور' : 'مثال: أحمد محمد'}
+              maxLength={60}
               autoComplete="name"
             />
           </Field>
@@ -84,7 +92,7 @@ export function SetupScreen() {
             label="رقم الهاتف"
             required
             error={errors.phone}
-            hint="رقمك على هذا الجهاز — به تدخل في كل مرة بلا كلمة مرور"
+            hint="يُستخدم لتسجيل الدخول واستعادة كلمة المرور"
             htmlFor="phone"
           >
             <Input
@@ -92,10 +100,38 @@ export function SetupScreen() {
               type="tel"
               inputMode="tel"
               dir="ltr"
-              autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="777 123 456"
+              autoComplete="tel"
+            />
+          </Field>
+
+          <Field
+            label="كلمة المرور"
+            required
+            error={errors.password}
+            hint="4 خانات على الأقل — أرقام أو حروف كما تريد"
+            htmlFor="password"
+          >
+            <Input
+              id="password"
+              type="password"
+              dir="ltr"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+
+          <Field label="تأكيد كلمة المرور" required error={errors.confirmPassword} htmlFor="confirm">
+            <Input
+              id="confirm"
+              type="password"
+              dir="ltr"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
             />
           </Field>
 
@@ -112,14 +148,14 @@ export function SetupScreen() {
           {errors._ ? <p className="text-[0.8125rem] font-bold text-danger-600">{errors._}</p> : null}
         </Card>
 
-        <p className="px-1 pt-4 text-[0.75rem] leading-5 text-ink-500">
+        <p className="px-1 text-[0.75rem] leading-5 text-ink-500">
           {kind === 'local'
-            ? 'يُحفظ حسابك ودفترك على هذا الجهاز — بلا كلمة مرور وبلا إنترنت. تكتب رقمك مرة واحدة، ويدخل بك بعدها مباشرة.'
+            ? 'يُحفظ حسابك ودفترك على هذا الجهاز. لا تحتاج بريدًا إلكترونيًا ولا إنترنت، وتستطيع الدخول مرة أخرى بنفس الرقم وكلمة المرور.'
             : 'سيُنشأ ملفك الشخصي في حسابك السحابي وتبدأ التسجيل فورًا.'}
         </p>
       </div>
 
-      <div className="space-y-2 pb-4 pt-6">
+      <div className="mt-auto space-y-2 pb-8 pt-6">
         <Button block size="lg" loading={busy} onClick={submit}>
           ابدأ الآن
         </Button>

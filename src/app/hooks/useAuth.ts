@@ -56,10 +56,10 @@ export function useAuth() {
       queryClient.clear()
     },
     /**
-     * إنشاء حساب على الجهاز: الاسم + رقم الهاتف (بلا كلمة مرور).
-     * يُحفظ الحساب فيعود إليه صاحبه برقمه بلا إعادة كتابة بيانات.
+     * إنشاء حساب على الجهاز: الاسم + رقم الهاتف + كلمة المرور.
+     * تُحفظ بيانات الدخول وبيانات المستخدم، فيعود إليها بعد تسجيل الخروج.
      */
-    async signUpOnDevice(input: { fullName: string; phone: string; role: Role }) {
+    async signUpOnDevice(input: { fullName: string; phone: string; password: string; role: Role }) {
       if (!ds.auth.signUpDevice) throw new Error('إنشاء الحساب على الجهاز غير متاح في هذا الوضع')
       const session = await ds.auth.signUpDevice(input)
       queryClient.setQueryData(qk.session, session)
@@ -67,14 +67,19 @@ export function useAuth() {
       await queryClient.invalidateQueries({ queryKey: qk.profile })
       return session
     },
-    /** فتح حساب محفوظ على الجهاز برقم الهاتف (بلا كلمة مرور) */
-    async openDeviceAccount(identifier: string) {
+    /** دخول لحساب محفوظ على الجهاز برقم الهاتف وكلمة المرور */
+    async signInWithPasswordDevice(identifier: string, password: string) {
       if (!ds.auth.signInDevice) throw new Error('الدخول على الجهاز غير متاح في هذا الوضع')
-      const session = await ds.auth.signInDevice({ identifier })
+      const session = await ds.auth.signInDevice({ identifier, password })
       queryClient.setQueryData(qk.session, session)
       await queryClient.invalidateQueries({ queryKey: qk.session })
       await queryClient.invalidateQueries({ queryKey: qk.profile })
       return session
+    },
+    /** استعادة كلمة المرور على الجهاز بعد التحقق من رقم الهاتف */
+    async resetDevicePassword(phone: string, newPassword: string) {
+      if (!ds.auth.resetDevicePassword) throw new Error('الاستعادة غير متاحة في هذا الوضع')
+      await ds.auth.resetDevicePassword({ phone, newPassword })
     },
     /** إرسال رابط استعادة كلمة المرور إلى البريد (الوضع السحابي) */
     async resetPassword(email: string) {

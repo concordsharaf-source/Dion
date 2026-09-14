@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck, Store, User } from 'lucide-react'
 import { Button, Card, Field, Input, useToast } from '@/components/ui'
+import { DesignCredit } from '@/components/DesignCredit'
 import { useAuth } from '@/app/hooks/useAuth'
 import { useDataSource, useDataSourceKind } from '@/app/DataSourceProvider'
-import { DesignCredit } from '@/components/DesignCredit'
 import type { DeviceAccount } from '@/data/port'
 import {
   deviceSignInSchema,
@@ -18,7 +18,7 @@ import { toUserMessage } from '@/core/errors'
 import { consumePendingRoute } from '@/app/pendingRoute'
 import type { Role } from '@/core/domain'
 
-/** رابط «هل نسيت كلمة المرور؟» — يظهر تحت نموذج الإنشاء والدخول */
+/** رابط «هل نسيت كلمة المرور؟» */
 function ForgotLink() {
   return (
     <Link to="/forgot" className="block py-2 text-center text-[0.8125rem] font-bold text-brand-600 underline">
@@ -27,19 +27,9 @@ function ForgotLink() {
   )
 }
 
-/** شارة نوع الحساب — اختير في شاشة البداية، فلا تُعاد أزراره هنا */
-function RoleChip({ role }: { role: Role }) {
-  return (
-    <p className="mt-1 flex items-center justify-center gap-2 text-[0.8125rem] text-ink-500">
-      {role === 'merchant' ? <Store size={15} /> : <User size={15} />}
-      الحساب: {role === 'merchant' ? 'تاجر' : 'عميل'}
-    </p>
-  )
-}
-
 /**
  * تسجيل الدخول.
- * وضع الجهاز: رقم الهاتف وحده (الحساب محفوظ على الجهاز بلا كلمة مرور).
+ * وضع الجهاز: رقم الهاتف وكلمة المرور (بيانات محفوظة على الجهاز).
  * الوضع السحابي: البريد الإلكتروني وكلمة المرور.
  */
 export function SignInScreen() {
@@ -86,7 +76,7 @@ export function SignInScreen() {
 
   async function submit() {
     if (kind === 'local') {
-      const result = validate(deviceSignInSchema, { identifier })
+      const result = validate(deviceSignInSchema, { identifier, password })
       if (!result.success) {
         setErrors(result.errors)
         return
@@ -94,8 +84,8 @@ export function SignInScreen() {
       setErrors({})
       setBusy(true)
       try {
-        await auth.openDeviceAccount(result.data!.identifier)
-        toast.show('تم الدخول إلى دفترك')
+        await auth.signInWithPasswordDevice(result.data!.identifier, result.data!.password)
+        toast.show('تم تسجيل الدخول')
         navigate(consumePendingRoute(), { replace: true })
       } catch (e) {
         setErrors({ _: toUserMessage(e) })
@@ -128,19 +118,13 @@ export function SignInScreen() {
       <div className="py-8 text-center">
         <h1 className="text-xl font-extrabold">تسجيل الدخول</h1>
         <p className="mt-1 text-[0.8125rem] text-ink-500">
-          {kind === 'local' ? 'أدخل رقم هاتفك للعودة إلى دفترك' : 'أدخل بيانات حسابك للمتابعة'}
+          {kind === 'local' ? 'أدخل رقم هاتفك وكلمة المرور' : 'أدخل بيانات حسابك للمتابعة'}
         </p>
       </div>
 
       <Card className="space-y-4">
         {kind === 'local' ? (
-          <Field
-            label="رقم الهاتف"
-            required
-            error={errors.identifier}
-            hint="نفس الرقم الذي سجّلت به — بلا كلمة مرور"
-            htmlFor="identifier"
-          >
+          <Field label="رقم الهاتف" required error={errors.identifier} htmlFor="identifier">
             <Input
               id="identifier"
               type="tel"
@@ -153,31 +137,35 @@ export function SignInScreen() {
             />
           </Field>
         ) : (
-          <>
-            <Field label="البريد الإلكتروني" required error={errors.email} htmlFor="email">
-              <Input
-                id="email"
-                type="email"
-                inputMode="email"
-                dir="ltr"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-              />
-            </Field>
-            <Field label="كلمة المرور" required error={errors.password} htmlFor="password">
-              <Input
-                id="password"
-                type="password"
-                dir="ltr"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </Field>
-          </>
+          <Field label="البريد الإلكتروني" required error={errors.email} htmlFor="email">
+            <Input
+              id="email"
+              type="email"
+              inputMode="email"
+              dir="ltr"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+            />
+          </Field>
         )}
+
+        <Field
+          label="كلمة المرور"
+          required
+          error={errors.password}
+          htmlFor="password"
+        >
+          <Input
+            id="password"
+            type="password"
+            dir="ltr"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
 
         {errors._ ? <p className="text-[0.8125rem] font-bold text-danger-600">{errors._}</p> : null}
       </Card>
@@ -219,7 +207,7 @@ export function SignInScreen() {
             </button>
           ))}
           <p className="text-[0.6875rem] leading-5 text-ink-500">
-            حسابات هذا الجهاز تُفتح بالرقم مباشرة — بياناتها محفوظة في هذا الجهاز وحده.
+            الدخول السريع لهذه الحسابات بلا كتابة كلمة المرور لأنها محفوظة على هذا الجهاز وحده.
           </p>
         </Card>
       ) : null}
@@ -229,17 +217,13 @@ export function SignInScreen() {
   )
 }
 
-/**
- * إنشاء حساب سحابي (للمشاركة مع الطرف الآخر):
- * الاسم + البريد + رقم الهاتف + كلمة المرور وتأكيدها، ثم تأكيد البريد.
- */
+/** إنشاء حساب (الوضع السحابي): الاسم + البريد + الهاتف + كلمة المرور وتأكيدها */
 export function SignUpScreen() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const toast = useToast()
   const auth = useAuth()
+  const toast = useToast()
   const ds = useDataSource()
-  const kind = useDataSourceKind()
 
   const role = ((params.get('role') as Role | null) ?? 'customer') as Role
   const [name, setName] = useState('')
@@ -250,9 +234,20 @@ export function SignUpScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [awaiting, setAwaiting] = useState<string | null>(null)
-  const [resent, setResent] = useState(false)
 
-  if (kind === 'local') return <Navigate to={`/setup?role=${role}`} replace />
+  async function resend() {
+    if (!awaiting || !ds.auth.resendConfirmation) return
+    setBusy(true)
+    try {
+      await ds.auth.resendConfirmation(awaiting)
+      setErrors({})
+      toast.show('أرسلنا رابط التأكيد مرة أخرى', 'info')
+    } catch (e) {
+      setErrors({ _: toUserMessage(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function submit() {
     const result = validate(signUpCloudSchema, {
@@ -293,21 +288,6 @@ export function SignUpScreen() {
     }
   }
 
-  async function resend() {
-    if (!awaiting || !ds.auth.resendConfirmation) return
-    setBusy(true)
-    try {
-      await ds.auth.resendConfirmation(awaiting)
-      setResent(true)
-      setErrors({})
-      toast.show('أرسلنا الرابط مرة أخرى', 'info')
-    } catch (e) {
-      setErrors({ _: toUserMessage(e) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   if (awaiting) {
     return (
       <div className="flex min-h-[100dvh] flex-col px-5 pt-safe">
@@ -316,13 +296,16 @@ export function SignUpScreen() {
             <MailCheck size={26} />
           </span>
           <h1 className="mt-3 text-xl font-extrabold">تحقّق من بريدك</h1>
-          <RoleChip role={role} />
+          <p className="mt-1 flex items-center justify-center gap-2 text-[0.8125rem] text-ink-500">
+            {role === 'merchant' ? <Store size={15} /> : <User size={15} />}
+            الحساب: {role === 'merchant' ? 'تاجر' : 'عميل'}
+          </p>
         </div>
 
         <Card className="space-y-3 text-center">
           <p className="text-[0.8125rem] leading-6 text-ink-600 dark:text-ink-300">
             أرسلنا رابط تأكيد إلى <span className="font-bold" dir="ltr">{awaiting}</span>. افتح الرابط من هذا
-            الجهاز لتأكيد حسابك والدخول مباشرة — وبلا إعادة كتابة أي بيانات.
+            الجهاز لتأكيد حسابك والدخول مباشرة.
           </p>
           <p className="text-[0.75rem] leading-6 text-ink-500">
             لم تجد الرسالة؟ تحقّق من مجلد «الرسائل غير المرغوبة»، أو أعد الإرسال.
@@ -330,11 +313,11 @@ export function SignUpScreen() {
           {errors._ ? <p className="text-[0.8125rem] font-bold text-danger-600">{errors._}</p> : null}
         </Card>
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 space-y-2">
           <Button block size="lg" loading={busy} onClick={() => void resend()}>
-            {resent ? 'أرسل الرابط مرة أخرى' : 'إعادة إرسال رابط التأكيد'}
+            إعادة إرسال رابط التأكيد
           </Button>
-          <Button variant="ghost" block onClick={() => setAwaiting(null)} disabled={busy}>
+          <Button variant="ghost" block disabled={busy} onClick={() => setAwaiting(null)}>
             تغيير البريد الإلكتروني
           </Button>
           <Link to="/signin" className="block py-2 text-center text-[0.8125rem] font-bold text-brand-600 underline">
@@ -351,7 +334,10 @@ export function SignUpScreen() {
     <div className="flex min-h-[100dvh] flex-col px-5 pt-safe">
       <div className="py-6 text-center">
         <h1 className="text-xl font-extrabold">إنشاء حساب جديد</h1>
-        <RoleChip role={role} />
+        <p className="mt-1 flex items-center justify-center gap-2 text-[0.8125rem] text-ink-500">
+          {role === 'merchant' ? <Store size={15} /> : <User size={15} />}
+          الحساب: {role === 'merchant' ? 'تاجر' : 'عميل'}
+        </p>
       </div>
 
       <Card className="space-y-4">
@@ -394,10 +380,10 @@ export function SignUpScreen() {
           required
           error={errors.password}
           hint="4 خانات على الأقل — أرقام أو حروف كما تريد"
-          htmlFor="password2"
+          htmlFor="pass2"
         >
           <Input
-            id="password2"
+            id="pass2"
             type="password"
             dir="ltr"
             autoComplete="new-password"
@@ -415,11 +401,10 @@ export function SignUpScreen() {
             onChange={(e) => setConfirm(e.target.value)}
           />
         </Field>
-
         {errors._ ? <p className="text-[0.8125rem] font-bold text-danger-600">{errors._}</p> : null}
       </Card>
 
-      <div className="mt-5 space-y-2">
+      <div className="mt-5 space-y-2 pb-8">
         <Button block size="lg" loading={busy} onClick={submit}>
           إنشاء الحساب
         </Button>
@@ -428,12 +413,6 @@ export function SignUpScreen() {
           رجوع
         </Button>
       </div>
-
-      <p className="px-1 pt-4 text-[0.75rem] leading-6 text-ink-500">
-        الحساب السحابي للمشاركة: يُرسَل رابط التأكيد إلى بريدك، وبعد تأكيده تبدأ التسجيل فورًا.
-      </p>
-
-      <DesignCredit className="mt-auto py-6" />
     </div>
   )
 }

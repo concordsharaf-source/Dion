@@ -167,9 +167,22 @@ describe('نموذج الحساب السحابي (بريد + كلمة مرور)'
     expect(badEmail.errors.email).toBeTruthy()
   })
 
-  it('نموذج حساب الجهاز لا يطلب كلمة مرور أصلًا', () => {
-    const result = validate(signUpDeviceSchema, { fullName: 'أحمد محمد', phone: '0771234567' })
-    expect(result.success).toBe(true)
-    expect(Object.keys(result.data!)).toEqual(['fullName', 'phone'])
+  it('نموذج حساب الجهاز: الاسم + الهاتف + كلمة المرور (4 خانات) وتأكيدها', () => {
+    const ok = validate(signUpDeviceSchema, {
+      fullName: 'أحمد محمد',
+      phone: '0771234567',
+      password: '1234',
+      confirmPassword: '1234',
+    })
+    expect(ok.success).toBe(true)
+
+    const mismatch = validate(signUpDeviceSchema, {
+      fullName: 'أحمد محمد',
+      phone: '0771234567',
+      password: '1234',
+      confirmPassword: '12345',
+    })
+    expect(mismatch.success).toBe(false)
+    expect(mismatch.errors.confirmPassword).toContain('غير متطابقت')
   })
 })

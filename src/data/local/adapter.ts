@@ -472,10 +472,11 @@ export class LocalDataSource implements DataSource {
     },
 
     /**
-     * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف فقط (بلا كلمة مرور).
-     * يُحفظ الحساب ليُفتح لاحقًا بالرقم نفسه، فيدخل صاحبه بلا إعادة كتابة أي بيانات.
+     * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
+     * تُحفظ بيانات الدخول (هاتف + كلمة مرور مشفّرة) وبيانات المستخدم،
+     * فيستطيع الدخول بعد تسجيل الخروج ويرى دفتره كما تركه.
      */
-    signUpDevice: async ({ fullName, phone, role }) => {
+    signUpDevice: async ({ fullName, phone, password, role }) => {
       const db = await getDB()
       const normalizedPhone = normalizePhoneNumber(phone)
       if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
@@ -487,7 +488,8 @@ export class LocalDataSource implements DataSource {
 
       const id = uuid()
       const email = `device-${id.slice(0, 8)}@local`
-      const user: UserRow = { id, email, passwordHash: '', salt: '', phone: normalizedPhone, createdAt: nowISO() }
+      const { hash, salt } = await hashPassword(password)
+      const user: UserRow = { id, email, passwordHash: hash, salt, phone: normalizedPhone, createdAt: nowISO() }
       await db.put('users', user)
 
       const profile: Profile = {
@@ -516,11 +518,8 @@ export class LocalDataSource implements DataSource {
       return session
     },
 
-    /**
-     * فتح حساب محفوظ على هذا الجهاز برقم الهاتف (بلا كلمة مرور).
-     * البيانات محفوظة فيه أصلًا، فالرقم وحده يكفي للعودة إلى الدفتر كما تُرك.
-     */
-    signInDevice: async ({ identifier }) => {
+    /** دخول برقم الهاتف (أو البريد) وكلمة المرور — لحساب محفوظ على هذا الجهاز */
+    signInDevice: async ({ identifier, password }) => {
       const db = await getDB()
       const needle = identifier.trim().toLowerCase()
       const phone = normalizePhoneNumber(identifier)
@@ -529,7 +528,10 @@ export class LocalDataSource implements DataSource {
       const user = users.find(
         (u) => samePhone(u.phone, phone) || (u.email ? u.email.toLowerCase() === needle : false),
       )
-      if (!user) throw appError('not_found', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      if (!user) throw appError('unauthorized', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      const ok = await verifyPassword(password, user.passwordHash, user.salt)
+      if (!ok) throw appError('unauthorized', undefined, 'كلمة المرور غير صحيحة.')
+
       if (phone && user.phone !== phone) {
         // ترحيل هادئ: نُخزّن الرقم بصيغته المحلية الموحّدة (بلا مفتاح دولة)
         await db.put('users', { ...user, phone })
@@ -546,6 +548,39 @@ export class LocalDataSource implements DataSource {
       }
       this.authListeners.forEach((cb) => cb(session))
       return session
+    },
+
+    /** استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل */
+    resetDevicePassword: async ({ phone, newPassword }) => {
+      const normalizedPhone = normalizePhoneNumber(phone)
+      if (!normalizedPhone) throw appError('validation', undefined, 'رقم الهاتف غير صحيح.')
+      const db = await getDB()
+      const users = (await db.getAll('users')) as UserRow[]
+      const user = users.find((u) => u.phone === normalizedPhone)
+      if (!user) throw appError('not_found', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
+      const { hash, salt } = await hashPassword(newPassword)
+      await db.put('users', { ...user, passwordHash: hash, salt })
+    },
+
+    /** بحث سريع عن حساب على هذا الجهاز (لتوجيه رسائل الاستعادة) */
+    findDeviceAccount: async (identifier: string) => {
+      const db = await getDB()
+      const needle = identifier.trim().toLowerCase()
+      const phone = normalizePhoneNumber(identifier)
+      const users = (await db.getAll('users')) as UserRow[]
+      const user = users.find(
+        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
+      )
+      if (!user) return null
+      const profile = (await db.get('profiles', user.id)) as unknown as Profile | undefined
+      return {
+        id: user.id,
+        fullName: profile?.fullName ?? '',
+        role: profile?.role ?? 'customer',
+        createdAt: user.createdAt,
+        phone: user.phone ?? null,
+        email: user.email,
+      }
     },
 
     /** قائمة الحسابات المحفوظة على هذا الجهاز — لإتاحة الدخول بعد الخروج */

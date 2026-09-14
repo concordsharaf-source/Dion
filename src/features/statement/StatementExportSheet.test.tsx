@@ -69,6 +69,8 @@ async function startBook(role: 'عميل' | 'تاجر', name: string) {
   await user.click(screen.getByRole('button', { name: 'متابعة' }))
   await user.type(await screen.findByLabelText(/^الاسم/), name)
   await user.type(screen.getByLabelText(/^رقم الهاتف/), '777123456')
+  await user.type(screen.getByLabelText(/^كلمة المرور/), 'pass1234')
+  await user.type(screen.getByLabelText(/^تأكيد كلمة المرور/), 'pass1234')
   await user.click(screen.getByRole('button', { name: 'ابدأ الآن' }))
 
   await waitFor(() => expect(screen.queryByText('مرحبًا بك في دفترك')).not.toBeInTheDocument(), { timeout: 5000 })
