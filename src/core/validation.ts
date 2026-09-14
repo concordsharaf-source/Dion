@@ -197,15 +197,14 @@ export const passwordSchema = z
   .min(4, { message: 'كلمة المرور 4 خانات على الأقل' })
   .max(72, { message: 'كلمة المرور طويلة جدًا' })
 
-export const signUpSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-  fullName: z
-    .unknown()
-    .transform((v) => sanitizeText(v, 60))
-    .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
-  role: z.enum(['customer', 'merchant']),
-})
+/**
+ * كلمة مرور الحساب السحابي: مزوّد الحساب يرفض ما دون 6 خانات،
+ * فنطلبها صريحة هنا بدل أن يُرفض الطلب عند الإرسال.
+ */
+export const cloudPasswordSchema = z
+  .string()
+  .min(6, { message: 'كلمة المرور السحابية 6 خانات على الأقل' })
+  .max(72, { message: 'كلمة المرور طويلة جدًا' })
 
 export const signInSchema = z.object({
   email: emailSchema,
@@ -238,15 +237,15 @@ export const signUpDeviceSchema = z
     path: ['confirmPassword'],
   })
 
-export const signUpCloudSchema = z
+/**
+ * إضافة بريد إلكتروني لحساب على الجهاز (من الإعدادات) ⇒ تشغيل الحساب السحابي.
+ * كلمة المرور هنا كلمة مرور الحساب السحابي: 6 خانات على الأقل (شرط مزوّد الحساب)،
+ * وهي مستقلة عن كلمة مرور الجهاز التي تبقى 4 خانات.
+ */
+export const linkCloudSchema = z
   .object({
-    fullName: z
-      .unknown()
-      .transform((v) => sanitizeText(v, 60))
-      .refine((v) => v.length >= 2, { message: 'أدخل الاسم' }),
     email: emailSchema,
-    phone: requiredPhoneField,
-    password: passwordSchema,
+    password: cloudPasswordSchema,
     confirmPassword,
   })
   .refine((v) => v.password === v.confirmPassword, {

@@ -5,7 +5,8 @@ import {
   normalizePhoneNumber,
   partySchema,
   passwordSchema,
-  signUpCloudSchema,
+  cloudPasswordSchema,
+  linkCloudSchema,
   signUpDeviceSchema,
   sanitizeMultiline,
   sanitizeText,
@@ -121,47 +122,43 @@ describe('كلمة المرور', () => {
   })
 })
 
-describe('نموذج الحساب السحابي (بريد + كلمة مرور)', () => {
-  it('يقبل بيانات صحيحة', () => {
-    const result = validate(signUpCloudSchema, {
-      fullName: 'متجر النور',
-      email: 'owner@example.com',
-      phone: '771234567',
-      password: '1234',
-      confirmPassword: '1234',
+describe('نموذج إضافة البريد (ربط حساب سحابي)', () => {
+  it('يقبل بريدًا صحيحًا وكلمة مرور سحابية من 6 خانات', () => {
+    const result = validate(linkCloudSchema, {
+      email: 'Owner@Example.com',
+      password: '123456',
+      confirmPassword: '123456',
     })
     expect(result.success).toBe(true)
+    expect(result.data?.email).toBe('owner@example.com')
   })
 
   it('يرفض كلمتين غير متطابقتين', () => {
-    const result = validate(signUpCloudSchema, {
-      fullName: 'متجر النور',
+    const result = validate(linkCloudSchema, {
       email: 'owner@example.com',
-      phone: '771234567',
-      password: '1234',
+      password: '123456',
       confirmPassword: '12345',
     })
     expect(result.success).toBe(false)
     expect(result.errors.confirmPassword).toContain('غير متطابقت')
   })
 
-  it('يرفض كلمة مرور أقل من 4 خانات وبريدًا غير صحيح', () => {
-    const short = validate(signUpCloudSchema, {
-      fullName: 'أحمد',
-      email: 'a@b.com',
-      phone: '771234567',
-      password: '123',
-      confirmPassword: '123',
-    })
-    expect(short.success).toBe(false)
-    expect(short.errors.password).toContain('4')
-
-    const badEmail = validate(signUpCloudSchema, {
-      fullName: 'أحمد',
-      email: 'not-an-email',
-      phone: '771234567',
+  it('يرفض كلمة مرور أقل من 6 خانات وبريدًا غير صحيح', () => {
+    const short = validate(linkCloudSchema, {
+      email: 'owner@example.com',
       password: '1234',
       confirmPassword: '1234',
+    })
+    expect(short.success).toBe(false)
+    expect(short.errors.password).toContain('6')
+    // كلمة مرور الجهاز تبقى 4 خانات كما هي — القيد على الحساب السحابي وحده
+    expect(passwordSchema.safeParse('1234').success).toBe(true)
+    expect(cloudPasswordSchema.safeParse('1234').success).toBe(false)
+
+    const badEmail = validate(linkCloudSchema, {
+      email: 'not-an-email',
+      password: '123456',
+      confirmPassword: '123456',
     })
     expect(badEmail.success).toBe(false)
     expect(badEmail.errors.email).toBeTruthy()

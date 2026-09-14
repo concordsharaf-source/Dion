@@ -15,16 +15,15 @@ export const DB_NAME = 'dafatar-db'
  * وهو سبب توقّف التطبيق عند شاشة البداية سابقًا.
  * النسخة الاحتياطية تُخزَّن في مخزن `meta` (بلا حاجة لترقية).
  */
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 
 /** المهلة القصوى لفتح القاعدة قبل الانتقال إلى الفتح بأي إصدار متاح */
 export const DB_OPEN_TIMEOUT_MS = 2_500
 
 export interface UserRow {
-  /** رقم الهاتف المسجّل على الجهاز (للدخول والاستعادة) */
-  phone?: string | null
   id: string
-  email: string
+  /** رقم الهاتف المسجّل على الجهاز — هو معرّف الدخول والاستعادة */
+  phone: string
   passwordHash: string
   salt: string
   createdAt: string
@@ -49,7 +48,7 @@ export interface OutboxRow {
 }
 
 interface DafatarDB extends DBSchema {
-  users: { key: string; value: UserRow; indexes: { email: string } }
+  users: { key: string; value: UserRow; indexes: Record<string, string> }
   profiles: { key: string; value: Record<string, unknown> }
   parties: { key: string; value: Record<string, unknown>; indexes: { ownerId: string; 'ownerId_kind': string } }
   entries: {
@@ -82,7 +81,8 @@ interface StoreSpec {
 
 /** مواصفات مخازن القاعدة — مصدر واحد للحقيقة */
 const STORE_SPECS: StoreSpec[] = [
-  { name: 'users', keyPath: 'id', indexes: [{ name: 'email', keyPath: 'email', options: { unique: true } }] },
+  // حساب الجهاز يُعرَّف برقم الهاتف وحده — لا بريد إلكتروني ولا مفتاح تخزين فريد
+  { name: 'users', keyPath: 'id', indexes: [] },
   { name: 'profiles', keyPath: 'id', indexes: [] },
   {
     name: 'parties',
@@ -196,7 +196,7 @@ export function openDatabase(options: { version?: number; timeoutMs?: number; an
 
     try {
       request = openDB<DafatarDB>(DB_NAME, requestedVersion, {
-        upgrade(db) {
+        upgrade(db, _oldVersion, _newVersion, tx) {
           // أسماء المخازن تأتي من مواصفاتنا الثابتة (مصدر واحد للحقيقة)
           const schema = db as unknown as {
             objectStoreNames: { contains(name: string): boolean }
@@ -206,10 +206,25 @@ export function openDatabase(options: { version?: number; timeoutMs?: number; an
             ): { createIndex(name: string, keyPath: string | string[], options?: IDBIndexParameters): unknown }
           }
           for (const spec of STORE_SPECS) {
-            if (schema.objectStoreNames.contains(spec.name)) continue
-            const store = schema.createObjectStore(spec.name, { keyPath: spec.keyPath })
-            for (const index of spec.indexes) {
-              store.createIndex(index.name, index.keyPath, index.options)
+            if (!schema.objectStoreNames.contains(spec.name)) {
+              const created = schema.createObjectStore(spec.name, { keyPath: spec.keyPath })
+              for (const index of spec.indexes) {
+                created.createIndex(index.name, index.keyPath, index.options)
+              }
+              continue
+            }
+            // مخزن موجود: تُزامَن الفهارس مع المواصفات (تُحذف الفهارس التي لم تبقَ)
+            // بلا أي مساس بالبيانات المخزّنة داخل المخزن.
+            const rawTx = tx as unknown as { objectStore(name: string): unknown }
+            const existing = rawTx.objectStore(spec.name) as {
+              indexNames: { length: number; [index: number]: string; contains?(name: string): boolean }
+              deleteIndex(name: string): void
+            }
+            const wanted = new Set(spec.indexes.map((index) => index.name))
+            const names: string[] = []
+            for (let i = 0; i < existing.indexNames.length; i += 1) names.push(existing.indexNames[i]!)
+            for (const name of names) {
+              if (!wanted.has(name)) existing.deleteIndex(name)
             }
           }
         },

@@ -29,12 +29,14 @@ function actAs(session: AuthSession): void {
   localStorage.setItem(SESSION_LS, session.userId)
 }
 
-async function registerUser(email: string, name: string, role: 'merchant' | 'customer'): Promise<AuthSession> {
-  const res = await ds.auth.signUp({ email, password: 'pass1234', fullName: name, role })
-  if (!res.session) throw new Error('لم تُنشأ الجلسة')
-  await ds.auth.createProfile({ fullName: name, role, currency: 'YER' })
-  actAs(res.session)
-  return res.session
+/**
+ * ينشئ حسابًا على الجهاز (اسم + رقم + كلمة مرور) ويعيد جلسته.
+ * لا يوجد في المحرّك المحلي تسجيل بالبريد ولا دخول به — الحساب يُعرَّف بالرقم.
+ */
+async function registerUser(phone: string, name: string, role: 'merchant' | 'customer'): Promise<AuthSession> {
+  const session = await ds.auth.signUpDevice!({ fullName: name, phone, password: 'pass1234', role })
+  actAs(session)
+  return session
 }
 
 function ref(n: string): string {
@@ -60,9 +62,9 @@ beforeEach(async () => {
   sessionStorage.clear()
   ds = new LocalDataSource()
 
-  merchant = await registerUser('merchant@test.ye', 'متجر النور', 'merchant')
-  customer = await registerUser('customer@test.ye', 'أحمد', 'customer')
-  outsider = await registerUser('other@test.ye', 'شخص آخر', 'merchant')
+  merchant = await registerUser('777000001', 'متجر النور', 'merchant')
+  customer = await registerUser('777000002', 'أحمد', 'customer')
+  outsider = await registerUser('777000003', 'شخص آخر', 'merchant')
 })
 
 /* ============================ 1) التاجر منفردًا ============================ */
@@ -778,7 +780,7 @@ describe('النسخة الاحتياطية والاستعادة', () => {
     expect(payload.counts).toEqual({ parties: 1, entries: 2 })
 
     // دفتر جديد تمامًا على نفس الجهاز
-    const fresh = await registerUser('fresh@test.ye', 'دفتر جديد', 'merchant')
+    const fresh = await registerUser('777000004', 'دفتر جديد', 'merchant')
     actAs(fresh)
     expect((await ds.parties.list()).items).toHaveLength(0)
 

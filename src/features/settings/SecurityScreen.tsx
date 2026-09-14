@@ -26,7 +26,8 @@ export function SecurityScreen() {
   const [busy, setBusy] = useState(false)
   const [confirmOut, setConfirmOut] = useState(false)
 
-  const canChangePassword = Boolean(ds.auth.changePassword) && !local
+  // تغيير كلمة المرور متاح في الوضعين: كلمة مرور الجهاز تبقى محفوظة على الجهاز وحده
+  const canChangePassword = Boolean(ds.auth.changePassword)
 
   async function changePassword() {
     const parsed = validate(passwordSchema, next)
@@ -105,9 +106,14 @@ export function SecurityScreen() {
 
         {canChangePassword ? (
           <section>
-            <SectionTitle>تغيير كلمة المرور</SectionTitle>
+            <SectionTitle>{local ? 'تغيير كلمة مرور هذا الجهاز' : 'تغيير كلمة المرور'}</SectionTitle>
             <Card className="space-y-4">
-              <Field label="كلمة المرور الحالية" required htmlFor="cur-pass">
+              <Field
+                label="كلمة المرور الحالية"
+                required
+                hint={local ? 'كلمة المرور التي تُدخل بها دفترك على هذا الجهاز' : undefined}
+                htmlFor="cur-pass"
+              >
                 <Input
                   id="cur-pass"
                   type="password"
@@ -143,7 +149,9 @@ export function SecurityScreen() {
               </Button>
             </Card>
           </section>
-        ) : (
+        ) : null}
+
+        {local ? (
           <section>
             <SectionTitle>حماية الجهاز</SectionTitle>
             <Card className="space-y-2 text-[0.75rem] leading-5 text-ink-600 dark:text-ink-300">
@@ -158,7 +166,7 @@ export function SecurityScreen() {
               </ul>
             </Card>
           </section>
-        )}
+        ) : null}
 
         <Button block variant="ghost" className="text-danger-600" icon={<LogOut size={17} />} onClick={() => setConfirmOut(true)}>
           تسجيل الخروج

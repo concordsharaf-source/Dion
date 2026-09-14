@@ -17,8 +17,9 @@ export function WelcomeScreen() {
   const toast = useToast()
   const [role, setRole] = useState<Role | null>(null)
 
+  // مسار واحد للبدء: حساب على هذا الجهاز (بلا بريد إلكتروني) — والبريد خيار لاحق في الإعدادات
   const continueWith = (role: Role) => {
-    navigate(kind === 'local' ? `/setup?role=${role}` : `/signup?role=${role}`)
+    navigate(`/setup?role=${role}`)
   }
 
   const roles = [
@@ -100,11 +101,11 @@ export function WelcomeScreen() {
           متابعة
         </Button>
 
-        {kind === 'local' ? (
-          <p className="px-2 pt-1 text-center text-[0.6875rem] leading-5 text-ink-500">
-            تعمل النسخة الحالية بالكامل على هذا الجهاز — ولا تحتاج ربطًا بأي طرف آخر لاستخدام التطبيق.
-          </p>
-        ) : null}
+        <p className="px-2 pt-1 text-center text-[0.6875rem] leading-5 text-ink-500">
+          {kind === 'local'
+            ? 'يعمل التطبيق بالكامل على هذا الجهاز — بلا بريد إلكتروني وبلا ربط بأي طرف آخر.'
+            : 'دفترك يعمل على هذا الجهاز بلا بريد إلكتروني، وتضيف بريدك لاحقًا من الإعدادات للمزامنة.'}
+        </p>
 
         <Button variant="ghost" block onClick={() => navigate('/signin')} className="mt-1">
           لديّ حساب — تسجيل الدخول

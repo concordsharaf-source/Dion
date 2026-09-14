@@ -5,7 +5,8 @@
 
 import type { DataSource } from './port'
 import { LocalDataSource } from './local/adapter'
-import { isCloudOptedIn } from '@/core/cloudMode'
+import { appError } from '@/core/errors'
+import { CLOUD_SESSION_KEY, isCloudOptedIn } from '@/core/cloudMode'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -29,12 +30,17 @@ export function dataSourceKind(): 'local' | 'supabase' {
   return current?.kind ?? (isSupabaseActive() ? 'supabase' : 'local')
 }
 
-export async function loadDataSource(): Promise<DataSource> {
-  if (current) return current
-
-  if (!isSupabaseActive()) {
-    current = new LocalDataSource()
-    return current
+/**
+ * ينشئ محرّك Supabase (يُحمَّل عند الحاجة فقط — code splitting).
+ *
+ * يُستعمل في مكانين:
+ *   1) إقلاع التطبيق في الوضع السحابي
+ *   2) **ربط** حساب الجهاز بحساب سحابي من الإعدادات (إضافة البريد) — قبل
+ *      تبديل الوضع، فننشئ المحرّك مؤقتًا وننقل البيانات ثم نُفعّل الوضع.
+ */
+export async function createCloudSource(): Promise<DataSource> {
+  if (!isSupabaseConfigured()) {
+    throw appError('not_configured', undefined, 'مفاتيح مشروع Supabase غير مضبوطة في هذه البيئة.')
   }
 
   const [{ SupabaseDataSource }, { createClient }] = await Promise.all([
@@ -47,13 +53,24 @@ export async function loadDataSource(): Promise<DataSource> {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storageKey: 'dafatar.auth',
+      storageKey: CLOUD_SESSION_KEY,
     },
     realtime: { params: { eventsPerSecond: 5 } },
     global: { headers: { 'x-application-name': 'daftar-adyoon' } },
   })
 
-  current = new SupabaseDataSource(client)
+  return new SupabaseDataSource(client)
+}
+
+export async function loadDataSource(): Promise<DataSource> {
+  if (current) return current
+
+  if (!isSupabaseActive()) {
+    current = new LocalDataSource()
+    return current
+  }
+
+  current = await createCloudSource()
   return current
 }
 

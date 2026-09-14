@@ -5,13 +5,14 @@ import { WifiOff } from 'lucide-react'
 import { queryClient } from './queryClient'
 import { BootSplash, DataSourceProvider } from './DataSourceProvider'
 import { EmailLinkGate } from './EmailLinkGate'
+import { CloudWatcher } from './CloudWatcher'
 import { useProfile, useSession } from './hooks/useAuth'
 import { rememberPendingRoute } from './pendingRoute'
 import { ToastProvider, useToast } from '@/components/ui'
 import { AppShell } from './layout/AppShell'
 import { WelcomeScreen } from '@/features/auth/WelcomeScreen'
 import { SetupScreen } from '@/features/auth/SetupScreen'
-import { SignInScreen, SignUpScreen } from '@/features/auth/SignInScreen'
+import { SignInScreen } from '@/features/auth/SignInScreen'
 import { ForgotPasswordScreen } from '@/features/auth/ForgotPasswordScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { PartiesScreen } from '@/features/parties/PartiesScreen'
@@ -178,8 +179,9 @@ function NotFoundScreen() {
 const router = createHashRouter([
   { path: '/welcome', element: <WelcomeScreen /> },
   { path: '/signin', element: <SignInScreen /> },
-  { path: '/signup', element: <SignUpScreen /> },
   { path: '/setup', element: <SetupScreen /> },
+  // مسار قديم للتسجيل السحابي: التسجيل صار واحدًا (على الجهاز، بلا بريد إلكتروني)
+  { path: '/signup', element: <Navigate to="/setup" replace /> },
   { path: '/forgot', element: <ForgotPasswordScreen /> },
 
   {
@@ -227,6 +229,7 @@ export function App() {
           <ToastProvider>
             <OfflineBanner />
             <BackupWatcher />
+            <CloudWatcher />
             <EmailLinkGate>
               <AppLockGate>
                 <RouterProvider router={router} />

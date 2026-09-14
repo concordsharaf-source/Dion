@@ -31,12 +31,16 @@ export function useAuth() {
   const queryClient = useQueryClient()
 
   return {
+    /** إنشاء حساب سحابي بالبريد — لا يُستعمل في حساب الجهاز */
     async signUp(input: SignUpInput) {
+      if (!ds.auth.signUp) throw new Error('الحساب السحابي غير متاح في هذا الوضع')
       const result = await ds.auth.signUp(input)
       await queryClient.invalidateQueries({ queryKey: qk.session })
       return result
     },
+    /** دخول بالبريد وكلمة المرور — الوضع السحابي فقط */
     async signIn(email: string, password: string) {
+      if (!ds.auth.signIn) throw new Error('الدخول بالبريد غير متاح في هذا الوضع')
       const session = await ds.auth.signIn({ email, password })
       queryClient.setQueryData(qk.session, session)
       await queryClient.invalidateQueries({ queryKey: qk.session })
@@ -85,15 +89,6 @@ export function useAuth() {
     async resetPassword(email: string) {
       if (!ds.auth.resetPassword) throw new Error('الاستعادة عبر البريد غير متاحة في هذا الوضع')
       await ds.auth.resetPassword(email)
-    },
-    /** بدء سريع على الجهاز (الوضع المحلي) — بلا بريد ولا كلمة مرور */
-    async quickStart(input: { fullName: string; role: Role }) {
-      if (!ds.auth.signInQuick) throw new Error('البدء السريع غير متاح في هذا الوضع')
-      const session = await ds.auth.signInQuick(input)
-      queryClient.setQueryData(qk.session, session)
-      await queryClient.invalidateQueries({ queryKey: qk.session })
-      await queryClient.invalidateQueries({ queryKey: qk.profile })
-      return session
     },
     async createProfile(input: { fullName: string; role: Role; currency?: string; phone?: string | null }) {
       const profile = await ds.auth.createProfile(input)

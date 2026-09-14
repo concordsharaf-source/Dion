@@ -37,6 +37,7 @@ export interface Page<T> {
 
 export interface AuthSession {
   userId: string
+  /** بريد الحساب السحابي · null في حساب الجهاز (بلا بريد) */
   email: string | null
   createdAt: string
 }
@@ -68,6 +69,7 @@ export interface SyncResult {
 /* ============================ المصادقة ============================ */
 
 export interface SignUpInput {
+  /** البريد الإلكتروني — معرّف الحساب السحابي */
   email: string
   password: string
   fullName: string
@@ -91,8 +93,13 @@ export interface AuthPort {
   getSession(): Promise<AuthSession | null>
   /** الملف الشخصي للمستخدم الحالي (null قبل إتمام الإعداد) */
   getProfile(): Promise<Profile | null>
-  signUp(input: SignUpInput): Promise<SignUpResult>
-  signIn(input: SignInInput): Promise<AuthSession>
+  /**
+   * إنشاء حساب سحابي بالبريد الإلكتروني — الوضع السحابي فقط.
+   * الحساب العادي يُنشأ على الجهاز (`signUpDevice`) بلا حاجة لبريد.
+   */
+  signUp?(input: SignUpInput): Promise<SignUpResult>
+  /** الدخول بالبريد وكلمة المرور — الوضع السحابي فقط */
+  signIn?(input: SignInInput): Promise<AuthSession>
   signOut(): Promise<void>
   updateProfile(patch: Partial<Pick<Profile, 'fullName' | 'role' | 'currency' | 'theme' | 'numerals' | 'phone'>>): Promise<Profile>
   /** إنشاء الملف الشخصي بعد التسجيل (اختيار الدور) */
@@ -100,21 +107,16 @@ export interface AuthPort {
   onAuthStateChange(cb: (session: AuthSession | null) => void): () => void
   /** تغيير كلمة المرور (مستخدم مسجّل) */
   changePassword?(currentPassword: string, newPassword: string): Promise<void>
-  /**
-   * بدء سريع على الجهاز — متاح في المحرّك المحلي فقط.
-   * يُنشئ حسابًا محليًا باسم ورقم عشوائي غير معروض (لا حاجة لبريد إلكتروني).
-   */
-  signInQuick?(input: { fullName: string; role: Role }): Promise<AuthSession>
-  /** حسابات محفوظة على هذا الجهاز (وضع الدفتر المحلي) */
+  /** قائمة الحسابات المحفوظة على هذا الجهاز (وضع الدفتر المحلي) */
   listDeviceAccounts?(): Promise<DeviceAccount[]>
-  /** دخول بحساب محفوظ على هذا الجهاز بلا كلمة مرور (وضع الدفتر المحلي) */
+  /** دخول سريع بحساب محفوظ على هذا الجهاز (زر الحساب) */
   signInAsDeviceAccount?(accountId: string): Promise<AuthSession>
   /**
    * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
    * تبقى البيانات محفوظة على الجهاز، ويستطيع المستخدم الدخول بها بعد الخروج.
    */
   signUpDevice?(input: { fullName: string; phone: string; password: string; role: Role }): Promise<AuthSession>
-  /** دخول برقم الهاتف (أو البريد) وكلمة المرور لحساب محفوظ على هذا الجهاز */
+  /** دخول برقم الهاتف وكلمة المرور لحساب محفوظ على هذا الجهاز */
   signInDevice?(input: { identifier: string; password: string }): Promise<AuthSession>
   /**
    * استعادة كلمة المرور على هذا الجهاز بعد التحقق من رقم الهاتف المسجّل.
@@ -134,7 +136,7 @@ export interface AuthPort {
   resendConfirmation?(email: string): Promise<void>
 }
 
-/** حساب محفوظ على الجهاز — للتبديل السريع وبلا كتابة كلمة المرور */
+/** حساب محفوظ على الجهاز */
 export interface DeviceAccount {
   id: string
   fullName: string
@@ -142,8 +144,6 @@ export interface DeviceAccount {
   createdAt: string
   /** رقم الهاتف المسجّل (يُستخدم للدخول والاستعادة) */
   phone?: string | null
-  /** البريد الإلكتروني إن وُجد */
-  email?: string | null
 }
 
 /* ============================ إشعارات الدفع ============================ */
@@ -160,7 +160,6 @@ export interface StoredPushSubscription {
 export interface PushPort {
   saveSubscription(input: StoredPushSubscription): Promise<void>
   removeSubscription(endpoint: string): Promise<void>
-  hasSubscription(endpoint: string): Promise<boolean>
 }
 
 /* ============================ الأطراف (محل / عميل) ============================ */

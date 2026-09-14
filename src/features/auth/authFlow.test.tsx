@@ -1,7 +1,8 @@
 /**
  * اختبار مسار الحساب على هذا الجهاز:
- * إنشاء حساب (اسم + هاتف + كلمة مرور وتأكيدها) → خروج → دخول بالرقم وكلمة المرور
- * → استعادة الكلمة عند النسيان. والتحقق من أن البيانات تبقى موجودة بعد الدخول.
+ * إنشاء حساب (اسم + هاتف + كلمة مرور وتأكيدها) — بلا أي بريد إلكتروني —
+ * → خروج → دخول بالرقم وكلمة المرور → استعادة الكلمة عند النسيان.
+ * والتحقق من أن البيانات تبقى موجودة بعد الدخول.
  */
 
 import { render, screen, waitFor } from '@testing-library/react'
@@ -80,6 +81,19 @@ describe('حساب المستخدم على هذا الجهاز', () => {
     expect(screen.queryByRole('radio', { name: 'أنا عميل' })).not.toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: 'أنا تاجر' })).not.toBeInTheDocument()
     expect(screen.getByText(/الحساب: عميل/)).toBeInTheDocument()
+  })
+
+  it('لا يطلب البريد الإلكتروني في التسجيل، ويوضّح أنه يُضاف لاحقًا من الإعدادات', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await openAccountForm(user, 'تاجر')
+
+    // لا يوجد أي حقل بريد إلكتروني في شاشة التسجيل
+    expect(screen.queryByLabelText(/البريد/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/البريد الإلكتروني/)).not.toBeInTheDocument()
+    // ويُخبر المستخدم أن البريد اختياري ويُضاف من الإعدادات
+    expect(screen.getByText(/لا تحتاج بريدًا إلكترونيًا/)).toBeInTheDocument()
+    expect(screen.getByText(/إضافة بريدك من الإعدادات/)).toBeInTheDocument()
   })
 
   it('يرفض تأكيد كلمة المرور غير المطابق', async () => {

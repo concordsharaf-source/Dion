@@ -118,10 +118,14 @@ export function ProfileScreen() {
         </Card>
 
         <Card className="divide-y divide-ink-200/70 p-0 text-[0.8125rem] dark:divide-ink-800/70">
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
             <span className="text-ink-500">البريد الإلكتروني</span>
-            <span className="font-semibold" dir="ltr">
-              {session.data?.email ?? '—'}
+            <span className="text-end font-semibold" dir="ltr">
+              {session.data?.email ?? (
+                <span dir="rtl" className="text-[0.75rem] font-normal text-ink-500">
+                  غير مضاف — أضفه من «الحساب السحابي» في الإعدادات
+                </span>
+              )}
             </span>
           </div>
           <div className="flex items-center justify-between px-4 py-3">

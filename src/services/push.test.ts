@@ -25,7 +25,6 @@ function makePort(): PushPort & { saved: unknown[]; removed: string[] } {
     removeSubscription: async (endpoint) => {
       removed.push(endpoint)
     },
-    hasSubscription: async (endpoint) => saved.some((s) => (s as { endpoint: string }).endpoint === endpoint),
   }
 }
 

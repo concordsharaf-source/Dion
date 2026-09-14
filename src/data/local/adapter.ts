@@ -48,9 +48,6 @@ import type {
   Page,
   PartyPort,
   PartyQuery,
-  SignInInput,
-  SignUpInput,
-  SignUpResult,
   SyncPort,
   SyncResult,
   SyncState,
@@ -203,7 +200,7 @@ export class LocalDataSource implements DataSource {
     const db = await getDB()
     const user = (await db.get('users', userId)) as UserRow | undefined
     if (!user) return null
-    return { userId: user.id, email: user.email, createdAt: user.createdAt }
+    return { userId: user.id, email: null, createdAt: user.createdAt }
   }
 
   private async requireSession(): Promise<AuthSession> {
@@ -324,7 +321,11 @@ export class LocalDataSource implements DataSource {
     return rel
   }
 
-  /* ============================ المصادقة ============================ */
+  /* ============================ المصادقة ============================
+     لا يوجد في المحرّك المحلي تسجيل بالبريد ولا دخول به: حساب الجهاز
+     يُعرَّف برقم الهاتف وحده، والبريد يُضاف لاحقًا من الإعدادات لتشغيل
+     الحساب السحابي (انظر src/services/cloudLink.ts).
+     ================================================================== */
 
   readonly auth: AuthPort = {
     getSession: () => this.currentSession(),
@@ -335,46 +336,6 @@ export class LocalDataSource implements DataSource {
       const db = await getDB()
       const row = await db.get('profiles', session.userId)
       return row ? (row as unknown as Profile) : null
-    },
-
-    signUp: async (input: SignUpInput): Promise<SignUpResult> => {
-      const db = await getDB()
-      const email = input.email.trim().toLowerCase()
-      const existing = await db.getFromIndex('users', 'email', email)
-      if (existing) throw appError('conflict', undefined, 'هذا البريد مسجّل مسبقًا.')
-
-      const { hash, salt } = await hashPassword(input.password)
-      const user: UserRow = { id: uuid(), email, passwordHash: hash, salt, createdAt: nowISO() }
-      await db.put('users', user)
-
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
-      try {
-        sessionStorage.setItem(SESSION_TAB, user.id)
-        localStorage.setItem(SESSION_LS, user.id)
-      } catch {
-        /* ignore */
-      }
-      this.authListeners.forEach((cb) => cb(session))
-      return { session, needsEmailConfirmation: false }
-    },
-
-    signIn: async (input: SignInInput): Promise<AuthSession> => {
-      const db = await getDB()
-      const email = input.email.trim().toLowerCase()
-      const user = (await db.getFromIndex('users', 'email', email)) as UserRow | undefined
-      if (!user) throw appError('unauthorized', undefined, 'البريد أو كلمة المرور غير صحيحة.')
-      const ok = await verifyPassword(input.password, user.passwordHash, user.salt)
-      if (!ok) throw appError('unauthorized', undefined, 'البريد أو كلمة المرور غير صحيحة.')
-
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
-      try {
-        sessionStorage.setItem(SESSION_TAB, user.id)
-        localStorage.setItem(SESSION_LS, user.id)
-      } catch {
-        /* ignore */
-      }
-      this.authListeners.forEach((cb) => cb(session))
-      return session
     },
 
     signOut: async () => {
@@ -433,46 +394,8 @@ export class LocalDataSource implements DataSource {
     },
 
     /**
-     * بدء سريع: حساب محلي بلا بريد إلكتروني ولا كلمة مرور يكتبها المستخدم.
-     * يبقى الحساب مرتبطًا بهذا الجهاز، ويمكن استخدام التطبيق كاملًا به.
-     */
-    signInQuick: async ({ fullName, role }) => {
-      const db = await getDB()
-      const id = uuid()
-      const email = `device-${id.slice(0, 8)}@local`
-      const password = `${uuid()}${uuid()}`
-      const { hash, salt } = await hashPassword(password)
-      const user: UserRow = { id, email, passwordHash: hash, salt, createdAt: nowISO() }
-      await db.put('users', user)
-
-      const profile: Profile = {
-        id,
-        role,
-        roles: [role],
-        fullName: fullName.trim(),
-        phone: null,
-        currency: 'YER',
-        theme: 'system',
-        numerals: 'latin',
-        createdAt: nowISO(),
-        updatedAt: nowISO(),
-      }
-      await db.put('profiles', profile as unknown as Record<string, unknown>)
-
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
-      try {
-        sessionStorage.setItem(SESSION_TAB, user.id)
-        localStorage.setItem(SESSION_LS, user.id)
-      } catch {
-        /* ignore */
-      }
-      this.authListeners.forEach((cb) => cb(session))
-      this.emit({ table: 'profile', action: 'insert', id, userId: id })
-      return session
-    },
-
-    /**
      * إنشاء حساب على هذا الجهاز: الاسم + رقم الهاتف + كلمة المرور.
+     * هذا هو مسار التسجيل الوحيد — لا يُطلب بريد إلكتروني إطلاقًا.
      * تُحفظ بيانات الدخول (هاتف + كلمة مرور مشفّرة) وبيانات المستخدم،
      * فيستطيع الدخول بعد تسجيل الخروج ويرى دفتره كما تركه.
      */
@@ -487,9 +410,8 @@ export class LocalDataSource implements DataSource {
       }
 
       const id = uuid()
-      const email = `device-${id.slice(0, 8)}@local`
       const { hash, salt } = await hashPassword(password)
-      const user: UserRow = { id, email, passwordHash: hash, salt, phone: normalizedPhone, createdAt: nowISO() }
+      const user: UserRow = { id, phone: normalizedPhone, passwordHash: hash, salt, createdAt: nowISO() }
       await db.put('users', user)
 
       const profile: Profile = {
@@ -506,7 +428,7 @@ export class LocalDataSource implements DataSource {
       }
       await db.put('profiles', profile as unknown as Record<string, unknown>)
 
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      const session: AuthSession = { userId: user.id, email: null, createdAt: user.createdAt }
       try {
         sessionStorage.setItem(SESSION_TAB, user.id)
         localStorage.setItem(SESSION_LS, user.id)
@@ -521,13 +443,10 @@ export class LocalDataSource implements DataSource {
     /** دخول برقم الهاتف (أو البريد) وكلمة المرور — لحساب محفوظ على هذا الجهاز */
     signInDevice: async ({ identifier, password }) => {
       const db = await getDB()
-      const needle = identifier.trim().toLowerCase()
       const phone = normalizePhoneNumber(identifier)
       const users = (await db.getAll('users')) as UserRow[]
       // المقارنة بعد التوحيد: تقبل الأرقام القديمة المحفوظة بمفتاح دولة أو بصفر البداية
-      const user = users.find(
-        (u) => samePhone(u.phone, phone) || (u.email ? u.email.toLowerCase() === needle : false),
-      )
+      const user = users.find((u) => samePhone(u.phone, phone))
       if (!user) throw appError('unauthorized', undefined, 'لا يوجد حساب بهذا الرقم على هذا الجهاز.')
       const ok = await verifyPassword(password, user.passwordHash, user.salt)
       if (!ok) throw appError('unauthorized', undefined, 'كلمة المرور غير صحيحة.')
@@ -539,7 +458,7 @@ export class LocalDataSource implements DataSource {
         if (profile) await db.put('profiles', { ...profile, phone })
       }
 
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      const session: AuthSession = { userId: user.id, email: null, createdAt: user.createdAt }
       try {
         sessionStorage.setItem(SESSION_TAB, user.id)
         localStorage.setItem(SESSION_LS, user.id)
@@ -565,12 +484,10 @@ export class LocalDataSource implements DataSource {
     /** بحث سريع عن حساب على هذا الجهاز (لتوجيه رسائل الاستعادة) */
     findDeviceAccount: async (identifier: string) => {
       const db = await getDB()
-      const needle = identifier.trim().toLowerCase()
       const phone = normalizePhoneNumber(identifier)
+      if (!phone) return null
       const users = (await db.getAll('users')) as UserRow[]
-      const user = users.find(
-        (u) => (phone !== null && u.phone === phone) || (u.email ? u.email.toLowerCase() === needle : false),
-      )
+      const user = users.find((u) => samePhone(u.phone, phone))
       if (!user) return null
       const profile = (await db.get('profiles', user.id)) as unknown as Profile | undefined
       return {
@@ -579,7 +496,6 @@ export class LocalDataSource implements DataSource {
         role: profile?.role ?? 'customer',
         createdAt: user.createdAt,
         phone: user.phone ?? null,
-        email: user.email,
       }
     },
 
@@ -593,7 +509,6 @@ export class LocalDataSource implements DataSource {
         role: p.role,
         createdAt: p.createdAt,
         phone: p.phone ?? null,
-        email: null as string | null,
       }))
       accounts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       return accounts
@@ -603,7 +518,7 @@ export class LocalDataSource implements DataSource {
       const db = await getDB()
       const user = (await db.get('users', accountId)) as UserRow | undefined
       if (!user) throw appError('not_found', undefined, 'هذا الحساب غير موجود على الجهاز.')
-      const session: AuthSession = { userId: user.id, email: user.email, createdAt: user.createdAt }
+      const session: AuthSession = { userId: user.id, email: null, createdAt: user.createdAt }
       try {
         sessionStorage.setItem(SESSION_TAB, user.id)
         localStorage.setItem(SESSION_LS, user.id)

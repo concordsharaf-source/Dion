@@ -620,19 +620,6 @@ export class SupabaseDataSource implements DataSource {
         .eq('endpoint', endpoint)
       if (error) mapError(error)
     },
-
-    /** هل هذا الاشتراك محفوظ لهذا المستخدم؟ */
-    hasSubscription: async (endpoint: string) => {
-      const uid = await this.requireUserId()
-      const { data, error } = await this.client
-        .from('push_subscriptions')
-        .select('endpoint')
-        .eq('user_id', uid)
-        .eq('endpoint', endpoint)
-        .maybeSingle()
-      if (error) mapError(error)
-      return Boolean(data)
-    },
   }
 
   /* ============================ الأطراف ============================ */
