@@ -234,6 +234,13 @@ export async function maybeRunDailyBackup(ds: DataSource, profile: Profile | nul
     const auto = await readAutoBackupEnabled(profile.role)
     const meta = await readBackupMeta()
     if (!needsDailyBackup({ role: profile.role, autoEnabled: auto, lastDayKey: meta?.dayKey ?? null })) return null
+    // لا نسخة لدفتر فارغ: تكون نسخة بلا أطراف ولا عمليات بلا أي قيمة.
+    // وأول طرف أو عملية تُسجَّل ⇒ تُؤخذ نسخة فورًا (انظر المهلة أدناه).
+    const [parties, entries] = await Promise.all([
+      ds.parties.list({ includeArchived: true, limit: 1 }),
+      ds.entries.list({ status: 'all', limit: 1 }),
+    ])
+    if (parties.items.length === 0 && entries.items.length === 0) return null
     const created = await createRollingBackup(ds, profile)
     return created.meta
   } catch {
@@ -244,8 +251,12 @@ export async function maybeRunDailyBackup(ds: DataSource, profile: Profile | nul
   }
 }
 
+/** مهلة قصيرة بعد آخر تغيير في البيانات قبل أخذ النسخة */
+export const BACKUP_DEBOUNCE_MS = 4_000
+
 /**
- * مشغّل النسخة اليومية: يتحقق كل دقيقة، وعند إخفاء التطبيق، وعند حلول منتصف الليل المحلي.
+ * مشغّل النسخة اليومية: يتحقق عند الفتح، وبعد كل تغيير في البيانات (بمهلة قصيرة
+ * فلا تنتظر نهاية اليوم)، وعند إخفاء التطبيق، وعند حلول منتصف الليل المحلي.
  * يعيد دالة إيقاف.
  */
 export function startDailyBackupRunner(options: {
@@ -258,6 +269,7 @@ export function startDailyBackupRunner(options: {
 
   let stopped = false
   let lastDay = backupDayKey()
+  let debounce: number | null = null
 
   const run = () => {
     if (stopped) return
@@ -268,6 +280,17 @@ export function startDailyBackupRunner(options: {
 
   // عند الفتح: يكفي أن تكون نسخة اليوم غير موجودة
   run()
+
+  // بعد أي تغيير في البيانات: محاولة مؤجّلة قليلًا (تنجح مرة واحدة في اليوم)
+  const schedule = () => {
+    if (stopped) return
+    if (debounce !== null) window.clearTimeout(debounce)
+    debounce = window.setTimeout(() => {
+      debounce = null
+      run()
+    }, BACKUP_DEBOUNCE_MS)
+  }
+  const unsubscribe = ds.subscribe(schedule)
 
   const interval = window.setInterval(() => {
     const today = backupDayKey()
@@ -284,6 +307,8 @@ export function startDailyBackupRunner(options: {
 
   return () => {
     stopped = true
+    if (debounce !== null) window.clearTimeout(debounce)
+    unsubscribe()
     window.clearInterval(interval)
     document.removeEventListener('visibilitychange', onHidden)
   }

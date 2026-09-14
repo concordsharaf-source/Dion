@@ -31,7 +31,8 @@ import { backupDayKey, backupFileName } from '@/core/backup'
 
 /**
  * النسخة الاحتياطية — نسخة واحدة دائمًا على الجهاز.
- * للتاجر تُؤخذ تلقائيًا في نهاية كل يوم وتستبدل نسخة اليوم السابق.
+ * تُؤخذ تلقائيًا لكل حساب (تاجر أو عميل) بمجرد وجود طرف واحد في الدفتر،
+ * وتستبدل نسخة اليوم السابق. ويمكن إنشاؤها وتنزيلها كملف في أي وقت.
  */
 export function BackupScreen() {
   const toast = useToast()
@@ -134,7 +135,7 @@ export function BackupScreen() {
               <ShieldCheck size={14} className="shrink-0" /> نسخة واحدة دائمًا — كل نسخة جديدة تستبدل القديمة تمامًا.
             </li>
             <li className="flex items-center gap-2">
-              <Clock size={14} className="shrink-0" /> للتاجر تُؤخذ تلقائيًا في نهاية كل يوم.
+              <Clock size={14} className="shrink-0" /> تُؤخذ تلقائيًا كل يوم (تاجر أو عميل) بعد أول عملية في الدفتر.
             </li>
             <li className="flex items-center gap-2">
               <HardDriveDownload size={14} className="shrink-0" /> تُحفظ على جهازك فقط ولا تُرسل لأي خادم.
@@ -184,10 +185,10 @@ export function BackupScreen() {
               <Clock size={18} />
             </span>
             <div className="flex-1">
-              <p className="font-bold">نسخة في نهاية كل يوم</p>
+              <p className="font-bold">نسخة كل يوم — تلقائيًا</p>
               <p className="text-[0.6875rem] text-ink-500">
-                {auto.data || role !== 'merchant'
-                  ? 'تُستبدل نسخة الأمس بنسخة اليوم تلقائيًا.'
+                {auto.data
+                  ? 'مفعّلة — تُستبدل نسخة الأمس بنسخة اليوم تلقائيًا.'
                   : 'معطّلة — فعّلها لتأخذ نسخة تلقائية كل يوم.'}
               </p>
             </div>

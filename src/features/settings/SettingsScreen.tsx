@@ -27,6 +27,9 @@ import { useAuth, useIsLocalMode, useProfile } from '@/app/hooks/useAuth'
 import { useDataSource } from '@/app/DataSourceProvider'
 import { useAwaitingCount, useLinkRequests, useSyncState, useUnreadCount } from '@/app/hooks/useData'
 import { useTheme, type ThemeMode } from '@/app/theme'
+import { useBackupMeta } from '@/app/hooks/useBackup'
+import { backupDayKey } from '@/core/backup'
+import { formatRelativeAr } from '@/core/datetime'
 import { CURRENCIES } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
 import { queryClient, qk } from '@/app/queryClient'
@@ -54,6 +57,7 @@ export function SettingsScreen() {
   const lockConfig = readLockConfig()
   const [busy, setBusy] = useState(false)
 
+  const backup = useBackupMeta()
   const sync = useSyncState()
   const unread = useUnreadCount()
   const awaiting = useAwaitingCount()
@@ -62,6 +66,11 @@ export function SettingsScreen() {
 
   const p = profile.data
   if (!p) return <div className="skeleton m-4 h-40" />
+
+  // حالة النسخة الاحتياطية تظهر في الصف نفسه — بلا حاجة لفتح الشاشة
+  const backupHint = backup.data
+    ? `آخر نسخة: ${formatRelativeAr(backup.data.createdAt)} · ${backup.data.counts.parties} طرف و${backup.data.counts.entries} عملية`
+    : 'لا توجد نسخة بعد — تُؤخذ تلقائيًا مع أول عملية في دفترك'
 
   /** تشغيل/كتم صوت إتمام العمليات — مع سماع النغمة فورًا عند التفعيل */
   function toggleSound() {
@@ -325,10 +334,20 @@ export function SettingsScreen() {
               </span>
               <span className="flex-1">
                 <span className="block font-bold">النسخة الاحتياطية</span>
-                <span className="block text-[0.6875rem] text-ink-500">
-                  نسخة واحدة دائمًا{p.role === 'merchant' ? ' — تلقائيًا كل نهاية يوم' : ''}
-                </span>
+                <span className="block text-[0.6875rem] text-ink-500">{backupHint}</span>
               </span>
+              {backup.data ? (
+                <span
+                  className={clsx(
+                    'chip shrink-0',
+                    backup.data.dayKey === backupDayKey()
+                      ? 'bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200'
+                      : 'bg-ink-200 text-ink-600 dark:bg-ink-800 dark:text-ink-300',
+                  )}
+                >
+                  {backup.data.dayKey === backupDayKey() ? 'نسخة اليوم' : 'نسخة سابقة'}
+                </span>
+              ) : null}
               <ChevronLeft size={18} className="text-ink-400" />
             </Link>
             <Link

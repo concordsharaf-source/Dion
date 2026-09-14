@@ -146,8 +146,9 @@ describe('النسخة الاحتياطية — سياسة النسخة الوا
   })
 
   it('التاجر: نسخة تلقائية افتراضيًا — والعميل لا', () => {
+    // مفعّلة لكل الحسابات: العميل لا يرى «لا توجد نسخة» بلا سبب
     expect(defaultAutoBackup('merchant')).toBe(true)
-    expect(defaultAutoBackup('customer')).toBe(false)
+    expect(defaultAutoBackup('customer')).toBe(true)
   })
 
   it('تأخذ نسخة اليوم إن لم تكن موجودة، ولا تكرّرها', () => {
@@ -157,7 +158,7 @@ describe('النسخة الاحتياطية — سياسة النسخة الوا
     expect(needsDailyBackup({ role: 'merchant', autoEnabled: true, lastDayKey: '2026-09-14', now })).toBe(false)
   })
 
-  it('لا تأخذ نسخة إن كان الخيار موقوفًا', () => {
+  it('لا تأخذ نسخة إن كان الخيار موقوفًا (أي دور)', () => {
     expect(needsDailyBackup({ role: 'merchant', autoEnabled: false, lastDayKey: null })).toBe(false)
     expect(needsDailyBackup({ role: 'customer', autoEnabled: false, lastDayKey: null })).toBe(false)
   })
