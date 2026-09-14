@@ -29,6 +29,7 @@ import { useAwaitingCount, useLinkRequests, useSyncState, useUnreadCount } from 
 import { useTheme, type ThemeMode } from '@/app/theme'
 import { useBackupMeta } from '@/app/hooks/useBackup'
 import { backupDayKey } from '@/core/backup'
+import { describeBackup } from '@/services/backupStore'
 import { formatRelativeAr } from '@/core/datetime'
 import { CURRENCIES } from '@/core/money'
 import { toUserMessage } from '@/core/errors'
@@ -374,7 +375,9 @@ export function SettingsScreen() {
               </span>
               <span className="flex-1">
                 <span className="block font-bold">مسح بياناتي من هذا الجهاز</span>
-                <span className="block text-[0.6875rem] text-ink-500">لا يمكن استرجاعها بعد المسح</span>
+                <span className="block text-[0.6875rem] text-ink-500">
+                  {backup.data ? 'تبقى النسخة الاحتياطية ويمكن الاستعادة منها' : 'لا يمكن استرجاعها بعد المسح'}
+                </span>
               </span>
             </button>
           </Card>
@@ -450,7 +453,11 @@ export function SettingsScreen() {
       <ConfirmDialog
         open={confirmReset}
         title="مسح بياناتي من هذا الجهاز"
-        message="سيتم حذف السجلات والعمليات والإشعارات الخاصة بحسابك على هذا الجهاز. لا يمكن التراجع. تأكد من تنزيل نسخة احتياطية إن أردت."
+        message={
+          backup.data
+            ? `سيتم حذف السجلات والعمليات والإشعارات الخاصة بحسابك على هذا الجهاز. حسابك يبقى، والنسخة الاحتياطية المحفوظة (${describeBackup(backup.data)} من ${formatRelativeAr(backup.data.createdAt)}) تبقى أيضًا — ويمكنك الاستعادة منها لاحقًا من الإعدادات ← النسخة الاحتياطية.`
+            : 'سيتم حذف السجلات والعمليات والإشعارات الخاصة بحسابك على هذا الجهاز. حسابك يبقى. ولا توجد نسخة احتياطية محفوظة الآن، لذا أنشئ نسخة أولًا إن أردت الاحتفاظ بشيء.'
+        }
         confirmLabel="مسح نهائي"
         tone="danger"
         loading={busy}

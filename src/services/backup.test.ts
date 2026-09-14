@@ -17,6 +17,7 @@ import {
   readAutoBackupEnabled,
   readBackupMeta,
   readRollingBackup,
+  restoreFromStoredBackup,
   startDailyBackupRunner,
   writeAutoBackupEnabled,
 } from './backup'
@@ -175,5 +176,72 @@ describe('النسخة التلقائية على الجهاز', () => {
 
     await writeAutoBackupEnabled(true)
     expect(await maybeRunDailyBackup(ds, profile)).not.toBeNull()
+  })
+})
+
+/* ============================ الاستعادة من النسخة المحفوظة ============================ */
+
+describe('الاستعادة من النسخة المحفوظة داخل التطبيق', () => {
+  it('تعيد الأطراف والعمليات بعد «مسح بياناتي من هذا الجهاز» — النسخة لا يمسّها المسح', async () => {
+    const { ds, profile } = await openBook({ name: 'أحمد محمد', phone: '777000201', role: 'customer' })
+    await addPartnerAndDebt(ds, 'بقالة الحي', 'shop')
+
+    // نسخة محفوظة
+    await createRollingBackup(ds, profile)
+    // ثم مسح بيانات المستخدم من الجهاز (كما يفعل زر «مسح بياناتي»)
+    await ds.resetUserData!()
+    expect((await ds.parties.list()).items).toHaveLength(0)
+    expect((await ds.entries.list({ status: 'all' })).items).toHaveLength(0)
+
+    // الاستعادة من النسخة المحفوظة
+    const { result, meta } = await restoreFromStoredBackup(ds)
+    expect(result.parties).toBe(1)
+    expect(result.entries).toBe(1)
+    expect(meta.counts).toEqual({ parties: 1, entries: 1 })
+
+    const parties = (await ds.parties.list()).items
+    expect(parties).toHaveLength(1)
+    expect(parties[0]!.name).toBe('بقالة الحي')
+    expect((await ds.entries.list({ status: 'all' })).items).toHaveLength(1)
+  })
+
+  it('دمج آمن قابل للتكرار: الاستعادة الثانية تتخطّى كل شيء بلا تكرار', async () => {
+    const { ds, profile } = await openBook({ name: 'متجر النور', phone: '777000202', role: 'merchant' })
+    await addPartnerAndDebt(ds, 'أحمد', 'customer')
+    await createRollingBackup(ds, profile)
+
+    // الدفتر سليم أصلًا: لا يُضاف شيء (كل السجلات موجودة) ولا يُحذف شيء
+    const first = await restoreFromStoredBackup(ds)
+    expect(first.result.parties).toBe(0)
+    expect(first.result.entries).toBe(0)
+    expect(first.result.skipped).toBeGreaterThan(0)
+    expect((await ds.parties.list()).items).toHaveLength(1)
+
+    const second = await restoreFromStoredBackup(ds)
+    expect(second.result.parties).toBe(0)
+    expect(second.result.entries).toBe(0)
+    expect(second.result.skipped).toBeGreaterThan(0)
+    expect((await ds.parties.list()).items).toHaveLength(1)
+    expect((await ds.entries.list({ status: 'all' })).items).toHaveLength(1)
+  })
+
+  it('رسالة عربية واضحة إن لم توجد نسخة محفوظة بعد', async () => {
+    const { ds } = await openBook({ name: 'سالم', phone: '777000203', role: 'customer' })
+    await expect(restoreFromStoredBackup(ds)).rejects.toThrow(/لا توجد نسخة محفوظة/)
+  })
+
+  it('لا تُنشئ أطرافًا مكرّرة إن كان الطرف موجودًا بالاسم نفسه', async () => {
+    const { ds, profile } = await openBook({ name: 'متجر الفتح', phone: '777000204', role: 'merchant' })
+    await addPartnerAndDebt(ds, 'أحمد', 'customer')
+    await createRollingBackup(ds, profile)
+
+    // مسح ثم إعادة إنشاء طرف بالاسم نفسه (معرّف جديد)
+    await ds.resetUserData!()
+    await ds.parties.create({ kind: 'customer', name: 'أحمد' })
+
+    const { result } = await restoreFromStoredBackup(ds)
+    expect(result.parties).toBe(0)
+    expect(result.skipped).toBeGreaterThan(0)
+    expect((await ds.parties.list()).items).toHaveLength(1)
   })
 })

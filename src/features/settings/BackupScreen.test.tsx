@@ -4,6 +4,7 @@
  *   · الوضوح: الشاشة تقول أين تعيش النسخة (قاعدة بيانات المتصفح) وكيف تخرج ملفًا
  *   · الأثر: بعد «إنشاء نسخة الآن» تظهر الحالة، وتُقرأ النسخة فعلًا من التخزين
  *   · الحفظ: زر الملف يعيد وصف مكان الملف على هذا الجهاز
+ *   · الاستعادة: استعادة فعلية من النسخة المحفوظة بعد «مسح بياناتي من هذا الجهاز»
  */
 
 import { render, screen, waitFor } from '@testing-library/react'
@@ -104,5 +105,44 @@ describe('شاشة النسخة الاحتياطية', () => {
     )
     expect(await screen.findByText(/ستجده في مجلد التنزيلات/, {}, { timeout: 5000 })).toBeInTheDocument()
     expect(await readBackupMeta()).not.toBeNull()
+  })
+  it('يستعيد دفتره من النسخة المحفوظة بعد «مسح بياناتي من هذا الجهاز»', async () => {
+    const user = await startCustomerBook()
+
+    // طرف واحد في الدفتر (يظهر لاحقًا في شاشة الديون)
+    await user.click(await screen.findByRole('button', { name: 'إضافة محل' }, { timeout: 8000 }))
+    await user.type(await screen.findByLabelText(/^الاسم/), 'بقالة الحي')
+    await user.click(screen.getByRole('button', { name: 'إضافة محل' }))
+    await screen.findByRole('heading', { name: 'بقالة الحي' }, { timeout: 8000 })
+
+    // نسخة محفوظة يدويًا (إضافةً إلى التلقائية)
+    await openBackupScreen(user)
+    await user.click(screen.getByRole('button', { name: /إنشاء نسخة الآن/ }))
+    await screen.findByText('نسخة محفوظة على جهازك', {}, { timeout: 8000 })
+
+    // «مسح بياناتي من هذا الجهاز» من الإعدادات
+    await user.click(screen.getByRole('button', { name: 'رجوع' }))
+    await screen.findByRole('heading', { name: 'الإعدادات' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: /مسح بياناتي من هذا الجهاز/ }))
+    await user.click(await screen.findByRole('button', { name: 'مسح نهائي' }))
+
+    // الدفتر صار فارغًا فعلًا… والنسخة المحفوظة باقية
+    expect(await readBackupMeta()).not.toBeNull()
+
+    // … ثم الاستعادة من النسخة المحفوظة (بلا أي ملف)
+    await user.click(await screen.findByRole('link', { name: 'النسخة الاحتياطية' }))
+    await screen.findByRole('heading', { name: 'النسخة الاحتياطية' }, { timeout: 5000 })
+    await user.click(screen.getByRole('button', { name: /استعادة من النسخة المحفوظة على الجهاز/ }))
+    await user.click(await screen.findByRole('button', { name: 'استعادة' }))
+
+    // رسالة الاستعادة تذكر ما عاد
+    expect(await screen.findByText(/تمت الاستعادة من نسخة/, {}, { timeout: 8000 })).toBeInTheDocument()
+    // الرسالة وبطاقة الحالة كلتاهما تعرضان ما عاد من النسخة
+    expect(screen.getAllByText(/1 طرف · 0 عملية/).length).toBeGreaterThanOrEqual(2)
+
+    // والطرف عاد إلى الدفتر فعلًا
+    await user.click(screen.getByRole('button', { name: 'رجوع' }))
+    await user.click(await screen.findByRole('link', { name: 'الديون' }, { timeout: 5000 }))
+    expect(await screen.findByText('بقالة الحي', undefined, { timeout: 8000 })).toBeInTheDocument()
   })
 })

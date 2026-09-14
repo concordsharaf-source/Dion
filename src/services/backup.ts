@@ -219,6 +219,42 @@ export async function restoreFromFile(ds: DataSource, file: File): Promise<Resto
   return ds.restore(payload)
 }
 
+/* ============================ الاستعادة من النسخة المحفوظة على الجهاز ============================ */
+
+export interface StoredRestoreOutcome {
+  /** نتيجة الدمج */
+  result: RestoreResult
+  /** وصف النسخة التي استُعيدت (تاريخها ومحتواها) */
+  meta: BackupMeta
+}
+
+/**
+ * يستعيد **من النسخة المحفوظة داخل التطبيق** (قاعدة بيانات المتصفح) — بلا حاجة
+ * إلى ملف. هذا هو المسار المفيد لمن مسح بياناته بالخطأ أو خسر جزءًا منها:
+ * النسخة تبقى محفوظة في مخزن `meta` ولا يمسّها «مسح بياناتي من هذا الجهاز».
+ *
+ * الاستعادة **دمج آمن**: تُضاف السجلات الناقصة فقط، ولا يُحذف ولا يُستبدل شيء،
+ * ولا تتكرر العملية (معرّف فريد لكل عملية) — فيمكن تكرارها بلا ضرر.
+ */
+export async function restoreFromStoredBackup(ds: DataSource): Promise<StoredRestoreOutcome> {
+  if (!ds.restore) {
+    throw appError('validation', undefined, 'الاستعادة الكاملة متاحة في وضع الدفتر على الجهاز (بلا حساب سحابي).')
+  }
+  const stored = await readRollingBackup()
+  if (!stored) {
+    throw appError(
+      'not_found',
+      undefined,
+      'لا توجد نسخة محفوظة على هذا الجهاز بعد. تُؤخذ النسخة تلقائيًا بعد أول عملية في دفترك، أو أنشئها زر «إنشاء نسخة الآن».',
+    )
+  }
+  if (stored.payload.parties.length === 0 && stored.payload.entries.length === 0) {
+    throw appError('validation', undefined, 'النسخة المحفوظة لا تحتوي على أي طرف أو عملية.')
+  }
+  const result = await ds.restore(stored.payload)
+  return { result, meta: stored.meta }
+}
+
 /* ============================ النسخة اليومية ============================ */
 
 let running = false

@@ -20,6 +20,7 @@ import {
   useCreateBackup,
   useDownloadBackup,
   useRestoreBackup,
+  useRestoreStoredBackup,
   useToggleAutoBackup,
 } from '@/app/hooks/useBackup'
 import { useProfile } from '@/app/hooks/useAuth'
@@ -47,15 +48,18 @@ export function BackupScreen() {
   const clearBackup = useClearBackup()
   const toggleAuto = useToggleAutoBackup()
 
+  const restoreStored = useRestoreStoredBackup()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmRestore, setConfirmRestore] = useState(false)
   /** آخر نتيجة حفظ ملف: تخبر المستخدم أين وجد الملف فعلًا */
   const [savedHint, setSavedHint] = useState<string | null>(null)
   const saveMethod = detectBackupSaveMethod()
 
   const backup = meta.data ?? null
   const isToday = backup ? backup.dayKey === backupDayKey() : false
-  const busy = createBackup.isPending || download.isPending || restore.isPending || clearBackup.isPending
+  const busy =
+    createBackup.isPending || download.isPending || restore.isPending || clearBackup.isPending || restoreStored.isPending
 
   async function onCreate() {
     try {
@@ -72,6 +76,21 @@ export function BackupScreen() {
       setSavedHint(saved.hint)
       toast.show(saved.cancelled ? 'أُلغيت العملية — لم يُحفظ ملف' : saved.hint, saved.cancelled ? 'info' : 'ok')
     } catch (e) {
+      toast.show(toUserMessage(e), 'error')
+    }
+  }
+
+  /** استعادة من النسخة المحفوظة داخل التطبيق — بلا ملف */
+  async function onRestoreStored() {
+    try {
+      const { result, meta: restored } = await restoreStored.mutateAsync()
+      setConfirmRestore(false)
+      toast.show(
+        `تمت الاستعادة من نسخة ${formatDateTimeAr(restored.createdAt)}: ${result.parties} طرف · ${result.entries} عملية` +
+          (result.skipped > 0 ? ` (تخطّي ${result.skipped} موجودة سابقًا)` : ''),
+      )
+    } catch (e) {
+      setConfirmRestore(false)
       toast.show(toUserMessage(e), 'error')
     }
   }
@@ -168,9 +187,17 @@ export function BackupScreen() {
                 </span>
               </li>
               <li className="flex items-start gap-2">
+                <RotateCcw size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>للاستعادة منها:</b> اضغط «استعادة من النسخة المحفوظة على الجهاز» في قسم «النسخ والاستعادة» —
+                  تُدمج مع دفترك الحالي: تُضاف السجلات الناقصة فقط ولا يُحذف شيء. تعمل حتى لو مسحت بياناتك
+                  بالخطأ، لأن المسح لا يمسّ النسخة المحفوظة.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
                 <Upload size={14} className="mt-0.5 shrink-0" />
                 <span>
-                  <b>على جهاز جديد:</b> انقل نفس الملف ثم «استعادة من ملف نسخة» — الاستعادة دمج آمن بلا تكرار.
+                  <b>على جهاز جديد:</b> انقل ملف النسخة ثم «استعادة من ملف نسخة» — الاستعادة دمج آمن بلا تكرار.
                 </span>
               </li>
             </ul>
@@ -244,6 +271,18 @@ export function BackupScreen() {
                 </span>
               ) : null}
             </p>
+            {backup ? (
+              <Button
+                block
+                variant="soft"
+                icon={<RotateCcw size={18} />}
+                loading={restoreStored.isPending}
+                disabled={busy}
+                onClick={() => setConfirmRestore(true)}
+              >
+                استعادة من النسخة المحفوظة على الجهاز
+              </Button>
+            ) : null}
             <Button
               block
               variant="soft"
@@ -286,6 +325,20 @@ export function BackupScreen() {
           تحديث الحالة
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmRestore}
+        title="استعادة من النسخة المحفوظة"
+        message={
+          backup
+            ? `سيُدمج محتوى نسخة ${formatDateTimeAr(backup.createdAt)} (${describeBackup(backup)}) مع دفترك الحالي: تُضاف السجلات الناقصة فقط، ولا يُحذف أو يُستبدل أي سجل موجود.`
+            : ''
+        }
+        confirmLabel="استعادة"
+        loading={restoreStored.isPending}
+        onCancel={() => setConfirmRestore(false)}
+        onConfirm={() => void onRestoreStored()}
+      />
 
       <ConfirmDialog
         open={confirmClear}

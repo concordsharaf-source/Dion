@@ -10,6 +10,7 @@ import {
   readAutoBackupEnabled,
   readBackupMeta,
   restoreFromFile,
+  restoreFromStoredBackup,
   saveBackupFile,
   startDailyBackupRunner,
   writeAutoBackupEnabled,
@@ -80,6 +81,21 @@ export function useRestoreBackup() {
 
   return useMutation({
     mutationFn: (file: File) => restoreFromFile(ds, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries()
+      playFeedback('success')
+    },
+    onError: () => playFeedback('error'),
+  })
+}
+
+/** استعادة من النسخة المحفوظة داخل التطبيق (بلا ملف) */
+export function useRestoreStoredBackup() {
+  const ds = useDataSource()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => restoreFromStoredBackup(ds),
     onSuccess: () => {
       void queryClient.invalidateQueries()
       playFeedback('success')
