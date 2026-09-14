@@ -371,8 +371,13 @@
     bind()
   }
 
-  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot)
-  else boot()
+  /*
+   * الإقلاع فوريًا: مستمِعاتنا على document لا تحتاج DOM مكتملًا، والتحكّم البصري
+   * تقوده خاصية <html> التي يضبطها مصنّف index.html. وإن كان التحليل لم يكتمل
+   * نُعيد الإقلاع على DOMContentLoaded لنلحق العناصر (inert/aria-hidden) — بلا سباق.
+   */
+  boot()
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot, { once: true })
 
   // واجهة للاختبار والتحكّم من التطبيق نفسه (React) عند الحاجة
   global.PwaInstallGate = {
