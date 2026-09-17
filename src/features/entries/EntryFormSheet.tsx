@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, Delete, Search, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, Delete, Search } from 'lucide-react'
 import clsx from 'clsx'
 import { Button, Field, Input, Money, Sheet, Skeletons, useToast } from '@/components/ui'
 import { useCreateEntry, useFilteredParties } from '@/app/hooks/useData'
@@ -408,15 +408,6 @@ export function EntryFormSheet({
 
             <p className="text-[0.75rem] font-bold text-ink-500">{cur.name}</p>
 
-            {raw !== '' ? (
-              <button
-                type="button"
-                onClick={() => press('clear')}
-                className="mt-1 inline-flex items-center gap-1 text-[0.6875rem] font-bold text-ink-500 underline"
-              >
-                <X size={12} /> تفريغ المبلغ
-              </button>
-            ) : null}
           </div>
 
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
