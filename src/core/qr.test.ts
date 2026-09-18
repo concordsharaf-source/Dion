@@ -115,10 +115,15 @@ describe('محتوى الـ QR والرابط', () => {
 		expect(parseLinkPayload(url.replace(token, encodeURIComponent(token)))).toBe(token)
 	})
 
-  it('يستخرج الرمز من الكود اليدوي', () => {
-    const token = generateToken()
-    expect(parseLinkPayload(tokenToCode(token))).toBe(token)
-  })
+	it('يستخرج الرمز من الكود اليدوي', () => {
+		const token = generateToken()
+		expect(parseLinkPayload(tokenToCode(token))).toBe(token)
+	})
+
+	it('يستخرج الرمز الخام كما هو ولا يحوله إلى كود يدوي', () => {
+		const token = generateToken()
+		expect(parseLinkPayload(token)).toBe(token)
+	})
 
   it('يرفض المحتوى غير الصالح', () => {
     expect(parseLinkPayload('')).toBe(null)

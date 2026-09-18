@@ -181,14 +181,14 @@ export function parseLinkPayload(payload: string): string | null {
 	const scheme = raw.match(new RegExp(`^${LINK_SCHEME}://link/([A-Za-z0-9\\-_]{16,64})$`, 'i'))
   if (scheme) return scheme[1]
 
-  // رمز يدوي مجموعات
-  if (/^[A-Za-z0-9\-\s]{16,}$/.test(raw)) {
-    const token = codeToToken(raw)
-    return token.length >= 16 ? token : null
-  }
+	  // رمز يدوي base32 مجموعات بشرطات أو مسافات.
+	  if (/[-\s]/.test(raw) && /^[2-9A-HJ-NP-Z\-\s]{16,}$/i.test(raw)) {
+	    const token = codeToToken(raw)
+	    return token.length >= 16 ? token : null
+	  }
 
-  // رمز خام base64url
-  if (/^[A-Za-z0-9\-_]{16,64}$/.test(raw)) return raw
+	  // رمز خام base64url بلا فواصل — يُعاد كما هو.
+	  if (/^[A-Za-z0-9\-_]{16,64}$/.test(raw)) return raw
 
   return null
 }
