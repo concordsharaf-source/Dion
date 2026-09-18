@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { Camera, CameraOff, Check, Keyboard, Link2, ShieldCheck, X } from 'lucide-react'
 import { Button, Card, Field, Input, Money, useToast } from '@/components/ui'
 import { PageHeader } from '@/components/PageHeader'
@@ -33,12 +34,12 @@ export function LinkScanScreen() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const scannerRef = useRef<IScannerControls | null>(null)
   const stopRef = useRef(false)
 
   useEffect(() => {
     const supported =
       typeof window !== 'undefined' &&
-      'BarcodeDetector' in window &&
       typeof navigator !== 'undefined' &&
       Boolean(navigator.mediaDevices?.getUserMedia)
     setCameraSupported(supported)
@@ -52,30 +53,18 @@ export function LinkScanScreen() {
 
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-        streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play().catch(() => undefined)
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const Detector = (window as any).BarcodeDetector
-        const detector = new Detector({ formats: ['qr_code'] })
-        const loop = async () => {
-          if (stopRef.current || !videoRef.current) return
-          try {
-            const found = (await detector.detect(videoRef.current)) as { rawValue: string }[]
-            if (found.length > 0) {
+        const reader = new BrowserQRCodeReader()
+        if (!videoRef.current) return
+        scannerRef.current = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          videoRef.current,
+          (result) => {
+            if (result && !stopRef.current) {
               stopRef.current = true
-              void loadPreview(found[0].rawValue)
-              return
+              void loadPreview(result.getText())
             }
-          } catch {
-            /* تجاهل إطار فاشل */
-          }
-          timer = window.setTimeout(() => void loop(), 400)
-        }
-        void loop()
+          },
+        )
       } catch {
         setError('لم نتمكن من تشغيل الكاميرا. أدخل الرمز يدويًا.')
         setCameraOn(false)
@@ -86,6 +75,8 @@ export function LinkScanScreen() {
     return () => {
       stopRef.current = true
       window.clearTimeout(timer)
+      scannerRef.current?.stop()
+      scannerRef.current = null
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }

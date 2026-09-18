@@ -158,15 +158,27 @@ export function buildLinkUrl(token: string, origin?: string): string {
 
 /** يستخرج الرمز من أي نص مقروء من QR أو رابط أو كود يدوي */
 export function parseLinkPayload(payload: string): string | null {
-  const raw = (payload ?? '').trim()
-  if (!raw) return null
+	// بعض تطبيقات المراسلة تضيف مسافات أو محارف غير مرئية عند النسخ.
+	const raw = (payload ?? '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '')
+	if (!raw) return null
 
-  // رابط فيه ?t=...
-  const m = raw.match(/[?&]t=([A-Za-z0-9\-_]+)/)
-  if (m) return m[1]
+	// رابط فيه ?t=...
+	const m = raw.match(/[?&]t=([^&#\s]+)/i)
+	if (m) {
+		try {
+			const token = decodeURIComponent(m[1]).trim()
+			if (/^[A-Za-z0-9\-_]{16,64}$/.test(token)) return token
+		} catch {
+			return null
+		}
+	}
 
-  // صيغة dafatar://link/<token>
-  const scheme = raw.match(new RegExp(`^${LINK_SCHEME}://link/([A-Za-z0-9\\-_]+)$`, 'i'))
+	// قد يُنسخ الرابط مع نص محيط به من رسالة واتساب أو SMS.
+	const embedded = raw.match(/(?:https?:\/\/|dafatar:\/\/)[^\s<>"']+/i)
+	if (embedded && embedded[0] !== raw) return parseLinkPayload(embedded[0].replace(/[),.;،؛]+$/, ''))
+
+	// صيغة dafatar://link/<token>
+	const scheme = raw.match(new RegExp(`^${LINK_SCHEME}://link/([A-Za-z0-9\\-_]{16,64})$`, 'i'))
   if (scheme) return scheme[1]
 
   // رمز يدوي مجموعات

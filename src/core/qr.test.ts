@@ -101,12 +101,19 @@ describe('صلاحية الرمز', () => {
 })
 
 describe('محتوى الـ QR والرابط', () => {
-  it('يبني رابطًا ويستخرجه من جديد', () => {
-    const token = generateToken()
-    const url = buildLinkUrl(token, 'https://example.com')
-    expect(url).toBe(`https://example.com/#/link/scan?t=${encodeURIComponent(token)}`)
-    expect(parseLinkPayload(url)).toBe(token)
-  })
+	it('يبني رابطًا ويستخرجه من جديد', () => {
+		const token = generateToken()
+		const url = buildLinkUrl(token, 'https://example.com')
+		expect(url).toBe(`https://example.com/#/link/scan?t=${encodeURIComponent(token)}`)
+		expect(parseLinkPayload(url)).toBe(token)
+	})
+
+	it('يستخرج الرابط المنسوخ مع نص محيط وترميز URL', () => {
+		const token = generateToken()
+		const url = buildLinkUrl(token, 'https://example.com')
+		expect(parseLinkPayload(`افتح الرابط: ${url} الآن`)).toBe(token)
+		expect(parseLinkPayload(url.replace(token, encodeURIComponent(token)))).toBe(token)
+	})
 
   it('يستخرج الرمز من الكود اليدوي', () => {
     const token = generateToken()
