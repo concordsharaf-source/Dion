@@ -4,7 +4,7 @@ import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { Camera, CameraOff, Check, Keyboard, Link2, ShieldCheck, X } from 'lucide-react'
 import { Button, Card, Field, Input, Money, useToast } from '@/components/ui'
 import { PageHeader } from '@/components/PageHeader'
-import { useDataSource } from '@/app/DataSourceProvider'
+import { useDataSource, useDataSourceKind } from '@/app/DataSourceProvider'
 import { useProfile } from '@/app/hooks/useAuth'
 import { queryClient, qk } from '@/app/queryClient'
 import { formatCountdown } from '@/core/datetime'
@@ -19,6 +19,7 @@ import type { LinkPreview } from '@/data/port'
  */
 export function LinkScanScreen() {
   const ds = useDataSource()
+  const dataSourceKind = useDataSourceKind()
   const navigate = useNavigate()
   const toast = useToast()
   const profile = useProfile()
@@ -87,6 +88,10 @@ export function LinkScanScreen() {
     setBusy(true)
     setError('')
     try {
+      if (dataSourceKind === 'local') {
+        setError('الربط بين جهازين غير مُفعّل في هذه النسخة. إعداد الخدمة السحابية مطلوب أولًا من صاحب التطبيق.')
+        return
+      }
       const parsed = parseLinkPayload(raw.trim())
       if (!parsed) {
         setError('الرمز غير صالح أو منتهي الصلاحية. اطلب من التاجر إنشاء رمز جديد.')

@@ -30,10 +30,29 @@ export function CloudAccountSection() {
   const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // إن لم تُضبط مفاتيح المشروع في بيئة النشر فلا شيء لعرضه
-  if (!isSupabaseConfigured()) return null
-
   const active = kind === 'supabase'
+
+  // إظهار الحالة بدل إخفاء القسم؛ الربط بين جهازين يحتاج خادمًا مشتركًا.
+  if (!isSupabaseConfigured()) {
+    return (
+      <section>
+        <SectionTitle>الحساب السحابي</SectionTitle>
+        <Card className="space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gold-100 text-gold-700 dark:bg-gold-900/40 dark:text-gold-200">
+              <CloudOff size={20} />
+            </span>
+            <div className="flex-1">
+              <p className="text-[0.875rem] font-bold">الخدمة السحابية غير مُعدّة</p>
+              <p className="mt-1 text-[0.75rem] leading-5 text-ink-600 dark:text-ink-300">
+                الربط بين جهاز التاجر والعميل يحتاج إعداد خادم Supabase في نسخة التطبيق. حاليًا يعمل الدفتر على هذا الجهاز فقط، لذلك لن تظهر رموز الدعوة على جهاز آخر.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </section>
+    )
+  }
 
   /**
    * تشغيل الوضع السحابي ثم إعادة تحميل واحدة ليعمل التطبيق بالمحرّك السحابي.
