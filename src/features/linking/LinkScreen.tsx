@@ -94,8 +94,11 @@ export function LinkScreen() {
     }
   }
 
-  const pendingRequests = (requests.data ?? []).filter((r) => r.status === 'pending')
-  const myInvites = (requests.data ?? []).filter((r) => r.status === 'awaiting_scan' || r.expiresAt > new Date().toISOString())
+  // الطلب يعاد للطرفين لتحديث الحالة، لكن قرار القبول/الرفض للتاجر فقط.
+  const pendingRequests = isMerchant ? (requests.data ?? []).filter((r) => r.status === 'pending') : []
+  const myInvites = isMerchant
+    ? (requests.data ?? []).filter((r) => r.status === 'awaiting_scan' && r.expiresAt > new Date().toISOString())
+    : []
   const activeRelationships = (relationships.data ?? []).filter((r) => r.status === 'verified')
   const pendingProposals = (proposals.data ?? []).filter((p) => p.status === 'pending' && p.proposedBy !== profile.data?.id)
 
@@ -149,7 +152,7 @@ export function LinkScreen() {
             </div>
             <p className="font-extrabold">ربط حسابك بتاجر</p>
             <p className="text-[0.75rem] leading-5 text-ink-500">
-              امسح رمز QR الظاهر على جهاز التاجر، أو أدخل الرمز اليدوي. ستظهر لك بيانات التاجر قبل الموافقة.
+              امسح رمز QR الظاهر على جهاز التاجر، أو أدخل الرمز اليدوي. ستظهر لك بيانات التاجر قبل إرسال الطلب.
             </p>
             <Button block size="lg" onClick={() => navigate('/link/scan')}>
               مسح رمز QR

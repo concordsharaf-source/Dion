@@ -13,8 +13,8 @@ import { toUserMessage } from '@/core/errors'
 import type { LinkPreview } from '@/data/port'
 
 /**
- * مسح رمز الربط (العميل): يُعرض اسم التاجر فقط ثم يقرر العميل الموافقة.
- * بعد الموافقة يبقى الربط معلّقًا حتى يوافق التاجر أيضًا (موافقة الطرفين).
+ * مسح رمز الربط (العميل): يُعرض اسم التاجر فقط ثم يرسل العميل طلب الربط.
+ * قرار قبول طلب الربط النهائي يكون من التاجر فقط.
  * يدعم الإدخال اليدوي للرمز عند عدم توفر الكاميرا.
  */
 export function LinkScanScreen() {
@@ -133,7 +133,7 @@ export function LinkScanScreen() {
     const left = secondsRemaining(preview.expiresAt)
     return (
       <div>
-        <PageHeader title="تأكيد الربط" subtitle="موافقة الطرفين مطلوبة" />
+        <PageHeader title="إرسال طلب الربط" subtitle="ينتظر الطلب موافقة التاجر" />
         <div className="space-y-4 px-4 pt-4">
           <Card className="space-y-3 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-3xl bg-brand-600 text-white">
@@ -172,7 +172,7 @@ export function LinkScanScreen() {
 
           <div className="space-y-2">
             <Button block size="lg" loading={busy} icon={<Check size={18} />} onClick={() => void respond(true)}>
-              موافقة وإرسال الطلب
+              إرسال طلب الربط
             </Button>
             <Button block variant="ghost" icon={<X size={18} />} disabled={busy} onClick={() => void respond(false)}>
               لا أوافق
