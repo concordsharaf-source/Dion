@@ -12,11 +12,11 @@ export function AppShell() {
 
   // العودة لأعلى الصفحة عند تغيير المسار
   useEffect(() => {
-    window.scrollTo({ top: 0 })
+    document.querySelector<HTMLElement>('.app-scroll')?.scrollTo({ top: 0, behavior: 'auto' })
   }, [location.pathname])
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell-main">
       <main className="app-scroll">
         <Outlet />
       </main>

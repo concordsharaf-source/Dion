@@ -198,9 +198,21 @@
     box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05);
   }
 
+  /* الهيكل الداخلي فقط يملك تمريرًا مستقلًا؛ شاشات الدخول تبقى قابلة للتمرير طبيعيًا */
+  .app-shell-main {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   /* المنطقة القابلة للتمرير بين الهيدر والتنقل السفلي */
   .app-scroll {
     flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
     padding-bottom: calc(5.25rem + var(--safe-bottom));
   }
 
