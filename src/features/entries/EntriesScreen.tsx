@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ListOrdered } from 'lucide-react'
 import clsx from 'clsx'
@@ -23,7 +23,15 @@ export function EntriesScreen() {
   const [params, setParams] = useSearchParams()
   const profile = useProfile()
   const filter = (params.get('filter') as EntryQuery['filter']) ?? 'all'
-  const [openEntryId, setOpenEntryId] = useState<string | null>(null)
+  const entryIdParam = params.get('entryId') ?? params.get('open')
+  const [openEntryId, setOpenEntryId] = useState<string | null>(entryIdParam)
+
+  // إذا جاء من إشعار مع entryId، افتحه مباشرة
+  useEffect(() => {
+    if (entryIdParam) {
+      setOpenEntryId(entryIdParam)
+    }
+  }, [entryIdParam])
 
   const query = useMemo<EntryQuery>(() => ({ status: 'all', filter, limit: 200 }), [filter])
   const entries = useEntries(query)
@@ -141,7 +149,16 @@ export function EntriesScreen() {
       <EntryDetailSheet
         entryId={openEntryId}
         open={openEntryId !== null}
-        onClose={() => setOpenEntryId(null)}
+        onClose={() => {
+          setOpenEntryId(null)
+          // نظف entryId من الرابط بعد الإغلاق
+          if (params.get('entryId') || params.get('open')) {
+            const next = new URLSearchParams(params)
+            next.delete('entryId')
+            next.delete('open')
+            setParams(next, { replace: true })
+          }
+        }}
         partyName={openEntryId ? nameFor(entries.data?.items.find((e) => e.id === openEntryId) as FinancialEntry) : undefined}
       />
     </div>

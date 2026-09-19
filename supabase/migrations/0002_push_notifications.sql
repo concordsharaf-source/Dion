@@ -173,8 +173,11 @@ begin
                  'refType', new.ref_type,
                  'refId',   new.ref_id,
                  'url',     case
+                              when new.ref_type = 'entry' and new.ref_id is not null then '/#/entries?entryId=' || new.ref_id::text
                               when new.ref_type = 'entry' then '/#/entries'
-                              when new.ref_type = 'link'  then '/#/notifications'
+                              when new.ref_type = 'party' and new.ref_id is not null then '/#/parties/' || new.ref_id::text
+                              when new.ref_type = 'relationship' and new.ref_id is not null then '/#/link/' || new.ref_id::text
+                              when new.ref_type = 'link'  then '/#/link'
                               else '/#/notifications'
                             end
                ),

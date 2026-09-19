@@ -283,13 +283,18 @@ export function Sheet({
     document.addEventListener('keydown', onKey)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    ref.current?.focus()
+    // لا نسرق التركيز إذا كان المستخدم يكتب في حقل داخل الـ Sheet
+    const active = document.activeElement as HTMLElement | null
+    const isTypingInside = active && ref.current?.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)
+    if (!isTypingInside) {
+      ref.current?.focus()
+    }
     return () => {
       endOverlay()
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previous
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

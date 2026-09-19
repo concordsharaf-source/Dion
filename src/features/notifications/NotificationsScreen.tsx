@@ -50,10 +50,11 @@ export function NotificationsScreen() {
   async function open(id: string, refType: string | null, refId: string | null) {
     await ds.notifications.markRead(id)
     await queryClient.invalidateQueries({ queryKey: ['notifications'] })
-    if (refType === 'entry' && refId) navigate(`/entries?filter=all`)
+    if (refType === 'entry' && refId) navigate(`/entries?entryId=${encodeURIComponent(refId)}`)
     else if (refType === 'party' && refId) navigate(`/parties/${refId}`)
     else if (refType === 'relationship' && refId) navigate(`/link/${refId}`)
     else if (refType === 'link') navigate('/link')
+    else navigate('/notifications')
   }
 
   return (
