@@ -5,9 +5,18 @@
 /**
  * مفتاح الإشعارات العام (VAPID) — إن لم يُضبط تظهر رسالة واضحة.
  * يُقرأ وقت الاستدعاء (لا وقت تحميل الوحدة) حتى يمكن ضبطه/اختباره ديناميكيًا.
+ * 
+ * تم إضافة مفتاح افتراضي كـ fallback حتى لا يفشل التفعيل إن نسي المطور ضبط المتغير في الاستضافة
  */
+const FALLBACK_VAPID_PUBLIC_KEY = 'BIQ-Xe9ivmpVy6eftxhHyHYroqO33tI1q5aFYaQefnrN7WNHAQcgg7POuDSMaAr5EnKGZigLvy_ft-lwQ7dCEIg'
+
 export function getVapidPublicKey(): string {
-  return ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
+  const fromEnv = ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
+  if (fromEnv && fromEnv !== '<vapid-public-key>' && fromEnv.length > 20) {
+    return fromEnv
+  }
+  // fallback للمفتاح المعروف في المشروع حتى يعمل حتى بدون .env
+  return FALLBACK_VAPID_PUBLIC_KEY
 }
 
 interface NavLike {

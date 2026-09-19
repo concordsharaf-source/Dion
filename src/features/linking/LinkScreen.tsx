@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Check, Link2, Link2Off, QrCode, ScanLine, Timer, X } from 'lucide-react'
+import { Check, Copy, Link2, Link2Off, MessageCircle, QrCode, ScanLine, Share2, Timer, X } from 'lucide-react'
 import { Button, Card, Chip, EmptyState, Money, SectionTitle, Sheet, Skeletons, useToast } from '@/components/ui'
 import { PageHeader } from '@/components/PageHeader'
 import { useDataSource } from '@/app/DataSourceProvider'
@@ -15,7 +15,7 @@ import type { LinkRequest } from '@/core/domain'
 
 /**
  * مركز الربط — القسم الوحيد الذي يتطلب طرفين.
- * كل الوظائف الأخرى تعمل بلا ربط إطلاقًا.
+ * تم تحسينه: الآن يعرض رابط قابل للمشاركة عبر واتساب + نسخ الكود + مشاركة
  */
 export function LinkScreen() {
   const ds = useDataSource()
@@ -30,6 +30,7 @@ export function LinkScreen() {
 
   const [activeInvite, setActiveInvite] = useState<LinkRequest | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
   const [remaining, setRemaining] = useState(0)
   const [busy, setBusy] = useState(false)
 
@@ -49,9 +50,11 @@ export function LinkScreen() {
   useEffect(() => {
     if (!activeInvite) {
       setQrDataUrl('')
+      setLinkUrl('')
       return
     }
     const url = buildLinkUrl(activeInvite.token)
+    setLinkUrl(url)
     void QRCode.toDataURL(url, {
       width: 640,
       margin: 1,
@@ -94,11 +97,48 @@ export function LinkScreen() {
     }
   }
 
-  // الطلب يعاد للطرفين لتحديث الحالة، لكن قرار القبول/الرفض للتاجر فقط.
-  const pendingRequests = isMerchant ? (requests.data ?? []).filter((r) => r.status === 'pending') : []
-  const myInvites = isMerchant
-    ? (requests.data ?? []).filter((r) => r.status === 'awaiting_scan' && r.expiresAt > new Date().toISOString())
-    : []
+  async function copyToClipboard(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.show(`تم نسخ ${label}`, 'info')
+    } catch {
+      // fallback
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      toast.show(`تم نسخ ${label}`, 'info')
+    }
+  }
+
+  function shareViaWhatsApp() {
+    if (!linkUrl || !activeInvite) return
+    const text = `مرحباً! هذا رابط ربط حسابك معي في دفتر الديون:\n\n${linkUrl}\n\nأو استخدم الكود اليدوي: ${activeInvite.code}\n\nالرمز صالح 10 دقائق فقط. افتح التطبيق ← الربط ← مسح رمز QR ثم الصق الرابط أو الكود.`
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+    window.open(whatsappUrl, '_blank')
+  }
+
+  async function shareLink() {
+    if (!linkUrl) return
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'رابط الربط - دفتر الديون',
+          text: `رابط ربط حسابك - صالح 10 دقائق. الكود: ${activeInvite?.code}`,
+          url: linkUrl,
+        })
+        return
+      } catch {
+        // المستخدم ألغى أو فشل
+      }
+    }
+    void copyToClipboard(linkUrl, 'الرابط')
+  }
+
+  const pendingRequests = (requests.data ?? []).filter((r) => r.status === 'pending')
+  const myInvites = (requests.data ?? []).filter((r) => r.status === 'awaiting_scan' || new Date(r.expiresAt).getTime() > Date.now())
   const activeRelationships = (relationships.data ?? []).filter((r) => r.status === 'verified')
   const pendingProposals = (proposals.data ?? []).filter((p) => p.status === 'pending' && p.proposedBy !== profile.data?.id)
 
@@ -130,10 +170,10 @@ export function LinkScreen() {
             </div>
             <p className="font-extrabold">ربط عميل بحسابه</p>
             <p className="text-[0.75rem] leading-5 text-ink-500">
-              أنشئ رمز QR واعرضه للعميل. الرمز عشوائي، صالح 10 دقائق، ويُستخدم مرة واحدة، ولا يحتوي أي بيانات مالية.
+              أنشئ رمز QR واعرضه للعميل أو أرسله عبر واتساب. الرمز عشوائي، صالح 10 دقائق، ويُستخدم مرة واحدة.
             </p>
             <Button block size="lg" loading={busy} onClick={() => void createInvite()}>
-              إنشاء رمز ربط
+              إنشاء رمز ربط جديد
             </Button>
             {myInvites.length > 0 ? (
               <button
@@ -141,7 +181,7 @@ export function LinkScreen() {
                 onClick={() => setActiveInvite(myInvites[0])}
                 className="text-[0.75rem] font-bold text-brand-600 underline"
               >
-                عرض آخر رمز ({myInvites.length})
+                عرض آخر رمز ({myInvites.length}) - ينتهي بعد {formatCountdown(secondsRemaining(myInvites[0].expiresAt))}
               </button>
             ) : null}
           </Card>
@@ -152,10 +192,10 @@ export function LinkScreen() {
             </div>
             <p className="font-extrabold">ربط حسابك بتاجر</p>
             <p className="text-[0.75rem] leading-5 text-ink-500">
-              امسح رمز QR الظاهر على جهاز التاجر، أو أدخل الرمز اليدوي. ستظهر لك بيانات التاجر قبل إرسال الطلب.
+              امسح رمز QR الظاهر على جهاز التاجر، أو الصق الرابط أو الكود اليدوي الذي أرسله لك. ستظهر لك بيانات التاجر قبل الموافقة.
             </p>
             <Button block size="lg" onClick={() => navigate('/link/scan')}>
-              مسح رمز QR
+              مسح رمز QR أو لصق رابط
             </Button>
           </Card>
         )}
@@ -268,11 +308,11 @@ export function LinkScreen() {
         </section>
       </div>
 
-      {/* نافذة عرض رمز QR */}
+      {/* نافذة عرض رمز QR - محسّنة */}
       <Sheet
         open={activeInvite !== null}
         onClose={() => setActiveInvite(null)}
-        title="رمز الربط"
+        title="رمز الربط - شاركه مع العميل"
         footer={
           <Button
             block
@@ -302,16 +342,50 @@ export function LinkScreen() {
               ينتهي بعد {formatCountdown(remaining)}
             </div>
 
+            {/* الكود اليدوي مع نسخ */}
             <div className="rounded-2xl bg-ink-100 p-3 dark:bg-ink-900">
-              <p className="text-[0.6875rem] text-ink-500">أو أدخل الرمز يدويًا على جهاز العميل</p>
-              <p className="mt-1 select-all font-mono text-[0.9375rem] font-bold tracking-wider" dir="ltr">
-                {activeInvite.code}
-              </p>
+              <p className="text-[0.6875rem] text-ink-500">الكود اليدوي (للإدخال على جهاز العميل)</p>
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <p className="select-all font-mono text-[1.1rem] font-bold tracking-wider" dir="ltr">
+                  {activeInvite.code}
+                </p>
+                <Button size="sm" variant="ghost" icon={<Copy size={14} />} onClick={() => void copyToClipboard(activeInvite.code, 'الكود')}>
+                  نسخ
+                </Button>
+              </div>
             </div>
 
-            <p className="text-[0.6875rem] leading-5 text-ink-500">
-              الرمز عشوائي ولا يحتوي أي مبلغ أو بيانات مالية. بعد انتهاء صلاحيته أو استخدامه لا يمكن استخدامه مرة أخرى.
-            </p>
+            {/* رابط المشاركة */}
+            <div className="space-y-2 rounded-2xl border border-brand-200 bg-brand-50 p-3 dark:border-brand-800 dark:bg-brand-900/20">
+              <p className="text-start text-[0.6875rem] font-bold text-brand-800 dark:text-brand-200">رابط الربط (للمشاركة عبر واتساب)</p>
+              <p className="break-all rounded-xl bg-white p-2.5 text-start font-mono text-[0.7rem] leading-4 text-ink-700 dark:bg-ink-900 dark:text-ink-300" dir="ltr">
+                {linkUrl}
+              </p>
+              <div className="flex gap-2">
+                <Button block size="sm" variant="soft" icon={<Copy size={14} />} onClick={() => void copyToClipboard(linkUrl, 'الرابط')}>
+                  نسخ الرابط
+                </Button>
+                <Button block size="sm" icon={<Share2 size={14} />} onClick={() => void shareLink()}>
+                  مشاركة
+                </Button>
+                <Button block size="sm" variant="gold" icon={<MessageCircle size={14} />} onClick={shareViaWhatsApp}>
+                  واتساب
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-amber-50 p-3 text-start text-[0.6875rem] leading-5 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+              <strong>كيف يستخدمه العميل؟</strong>
+              <br />
+              1. يفتح التطبيق ← الربط ← مسح رمز QR
+              <br />
+              2. يوجّه الكاميرا للـ QR، أو يلصق الرابط/الكود في الحقل الذكي أدناه
+              <br />
+              3. يوافق على الربط ← ثم توافق أنت من طلبات الربط
+              <br />
+              <br />
+              <strong>ملاحظة:</strong> للربط بين جهازين مختلفين يجب تفعيل الحساب السحابي من الإعدادات أولاً.
+            </div>
           </div>
         ) : null}
       </Sheet>

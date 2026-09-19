@@ -156,39 +156,94 @@ export function buildLinkUrl(token: string, origin?: string): string {
   return `${base.replace(/\/$/, '')}/#/link/scan?t=${encodeURIComponent(token)}`
 }
 
-/** يستخرج الرمز من أي نص مقروء من QR أو رابط أو كود يدوي */
+/**
+ * يستخرج الرمز من أي نص مقروء من QR أو رابط أو كود يدوي
+ * ترتيب الفحص مهم جداً
+ */
 export function parseLinkPayload(payload: string): string | null {
-	// بعض تطبيقات المراسلة تضيف مسافات أو محارف غير مرئية عند النسخ.
-	const raw = (payload ?? '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '')
-	if (!raw) return null
+  const raw = (payload ?? '').trim()
+  if (!raw) return null
 
-	// رابط فيه ?t=...
-	const m = raw.match(/[?&]t=([^&#\s]+)/i)
-	if (m) {
-		try {
-			const token = decodeURIComponent(m[1]).trim()
-			if (/^[A-Za-z0-9\-_]{16,64}$/.test(token)) return token
-		} catch {
-			return null
-		}
-	}
+  // 1) رابط فيه ?t=... أو &t=... (يدعم الروابط الكاملة والهاش راوتر #/link/scan?t=...)
+  const paramMatch = raw.match(/[?&]t=([A-Za-z0-9\-_]+)/)
+  if (paramMatch) {
+    const token = paramMatch[1]
+    if (token.length >= 16) return token
+  }
 
-	// قد يُنسخ الرابط مع نص محيط به من رسالة واتساب أو SMS.
-	const embedded = raw.match(/(?:https?:\/\/|dafatar:\/\/)[^\s<>"']+/i)
-	if (embedded && embedded[0] !== raw) return parseLinkPayload(embedded[0].replace(/[),.;،؛]+$/, ''))
-
-	// صيغة dafatar://link/<token>
-	const scheme = raw.match(new RegExp(`^${LINK_SCHEME}://link/([A-Za-z0-9\\-_]{16,64})$`, 'i'))
+  // 2) صيغة dafatar://link/<token>
+  const scheme = raw.match(new RegExp(`^${LINK_SCHEME}://link/([A-Za-z0-9\\-_]+)$`, 'i'))
   if (scheme) return scheme[1]
 
-	  // رمز يدوي base32 مجموعات بشرطات أو مسافات.
-	  if (/[-\s]/.test(raw) && /^[2-9A-HJ-NP-Z\-\s]{16,}$/i.test(raw)) {
-	    const token = codeToToken(raw)
-	    return token.length >= 16 ? token : null
-	  }
+  // 3) رابط كامل قد يحتوي التوكن في الهاش - نحاول تحليل URL
+  try {
+    if (raw.includes('://')) {
+      const url = new URL(raw)
+      const combined = `${url.search}${url.hash}`
+      const innerMatch = combined.match(/[?&]t=([A-Za-z0-9\-_]+)/)
+      if (innerMatch) return innerMatch[1]
+    }
+  } catch {
+    /* ليس URL صالح */
+  }
 
-	  // رمز خام base64url بلا فواصل — يُعاد كما هو.
-	  if (/^[A-Za-z0-9\-_]{16,64}$/.test(raw)) return raw
+  // 4) كود يدوي (base32) - نفحصه قبل التوكن الخام لأنه أكثر تحديداً
+  // الكود: 39 محرف base32 (أبجدية خاصة) مع شرطات كل 4
+  // مثال: ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-89AB
+  const cleanedForCode = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  // الكود اليدوي: فقط أحرف 2-9 و A-H,J-N,P-Z (بلا 0,1,O,I) وطوله 16-60
+  const isBase32Code = /^[2-9A-HJ-NP-Z]{16,60}$/.test(cleanedForCode)
+  if (isBase32Code) {
+    // إذا كان النص يحتوي شرطات أو طوله ليس 32 (طول التوكن)، فهو كود
+    const hasDashes = raw.includes('-')
+    const cleanedLen = cleanedForCode.length
+    // التوكن 32 محرف، الكود 39 محرف - نستخدم الطول للتمييز
+    // وأيضاً الكود لا يحتوي أحرف صغيرة أبداً في الأصل
+    if (hasDashes || cleanedLen !== 32 || !/[a-z]/.test(raw)) {
+      try {
+        const token = codeToToken(raw)
+        // التوكن الناتج يجب أن يكون 30-44 محرف base64url
+        if (token.length >= 16 && /^[A-Za-z0-9\-_]+$/.test(token)) {
+          return token
+        }
+      } catch {
+        /* فشل التحويل */
+      }
+    }
+  }
+
+  // 5) رمز خام base64url مباشر (30-44 محرف، case-sensitive)
+  // التوكن الحقيقي 24 بايت = 32 محرف base64url
+  if (/^[A-Za-z0-9\-_]{30,64}$/.test(raw)) {
+    // تأكد أنه ليس كود يدوي مخلوط (الكود لا يحتوي 0,1,O,I)
+    // لكن التوكن قد يحتويها، لذا نرجعه كتوكن إذا فشل الكود أعلاه
+    // أو إذا كان يحتوي أحرف صغيرة (الكود دائماً كبير)
+    if (/[a-z]/.test(raw) || /[01OI]/.test(raw) || cleanedForCode.length === 32) {
+      return raw
+    }
+    // حتى لو لم يحتوي صغيرة، إذا طوله 32 فهو الأرجح توكن
+    if (cleanedForCode.length === 32) {
+      return raw
+    }
+    // محاولة أخيرة: جرب ككود، إن فشل ارجعه كتوكن
+    try {
+      const asCode = codeToToken(raw)
+      if (asCode.length >= 30) return asCode
+    } catch {
+      return raw
+    }
+    return raw
+  }
+
+  // 6) محاولة أخيرة: أي نص طويل قد يكون كود يدوي بمسافات/شرطات
+  if (/^[A-Za-z0-9\-\s]{16,}$/.test(raw)) {
+    try {
+      const token = codeToToken(raw)
+      if (token.length >= 16) return token
+    } catch {
+      /* ignore */
+    }
+  }
 
   return null
 }
