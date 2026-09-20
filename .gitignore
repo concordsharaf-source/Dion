@@ -13,3 +13,6 @@ test-results
 
 # مجلّد مؤقّت ينشئه Supabase CLI عند الربط
 supabase/.temp
+.ssh-permanent/
+SSH_*.txt
+PERMANENT_DEPLOY_KEY.txt
