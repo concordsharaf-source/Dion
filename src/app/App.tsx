@@ -6,6 +6,7 @@ import { queryClient } from './queryClient'
 import { BootSplash, DataSourceProvider } from './DataSourceProvider'
 import { EmailLinkGate } from './EmailLinkGate'
 import { CloudWatcher } from './CloudWatcher'
+import { GoogleRoleSync } from './GoogleRoleSync'
 import { useProfile, useSession } from './hooks/useAuth'
 import { rememberPendingRoute } from './pendingRoute'
 import { ToastProvider, useToast } from '@/components/ui'
@@ -230,6 +231,7 @@ export function App() {
             <OfflineBanner />
             <BackupWatcher />
             <CloudWatcher />
+            <GoogleRoleSync />
             <EmailLinkGate>
               <AppLockGate>
                 <RouterProvider router={router} />

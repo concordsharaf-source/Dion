@@ -134,6 +134,8 @@ export interface AuthPort {
   verifyEmailLink?(params: { tokenHash: string; type: EmailLinkType }): Promise<AuthSession | null>
   /** إعادة إرسال رابط تأكيد الحساب إلى البريد — الوضع السحابي فقط */
   resendConfirmation?(email: string): Promise<void>
+  /** تسجيل الدخول بـ Google (OAuth) — الوضع السحابي فقط، بدون كلمة مرور */
+  signInWithGoogle?(role?: Role): Promise<void>
 }
 
 /** حساب محفوظ على الجهاز */

@@ -588,6 +588,27 @@ export class SupabaseDataSource implements DataSource {
       const { error } = await this.client.auth.updateUser({ password: newPassword })
       if (error) mapError(error)
     },
+
+    signInWithGoogle: async (role) => {
+      // نحفظ الدور المختار مؤقتاً ليعاد استخدامه بعد العودة من Google
+      try {
+        if (role) localStorage.setItem('dafatar.pendingRole', role)
+      } catch {
+        /* ignore */
+      }
+      const { error } = await this.client.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/#/`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      })
+      if (error) mapError(error)
+      // لا نرجع جلسة هنا - المتصفح سيُعاد توجيهه إلى Google ثم يعود
+    },
   }
 
   /* ============================ إشعارات الدفع ============================ */
