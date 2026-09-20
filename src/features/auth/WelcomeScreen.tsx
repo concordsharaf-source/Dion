@@ -7,10 +7,6 @@ import { useDataSource, useDataSourceKind } from '@/app/DataSourceProvider'
 import { isSupabaseConfigured } from '@/data/load'
 import type { Role } from '@/core/domain'
 
-/**
- * شاشة البداية: «دفتر الديون» + تحديد نوع الحساب (عميل / تاجر).
- * الآن تدعم التسجيل بـ Google تلقائياً بدون كلمة مرور
- */
 export function WelcomeScreen() {
   const navigate = useNavigate()
   const kind = useDataSourceKind()
@@ -18,6 +14,7 @@ export function WelcomeScreen() {
   const ds = useDataSource()
   const [role, setRole] = useState<Role | null>(null)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [googleError, setGoogleError] = useState('')
 
   const canUseGoogle = isSupabaseConfigured()
 
@@ -35,13 +32,18 @@ export function WelcomeScreen() {
       return
     }
     setGoogleBusy(true)
+    setGoogleError('')
     try {
       try {
         localStorage.setItem('dafatar.pendingRole', role)
       } catch {}
       await ds.auth.signInWithGoogle?.(role)
+      // إذا لم يتم التوجيه خلال 3 ثوان، نعيد الزر
+      setTimeout(() => setGoogleBusy(false), 4000)
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : 'تعذر التسجيل بـ Google', 'error')
+      const msg = e instanceof Error ? e.message : 'تعذر التسجيل بـ Google'
+      setGoogleError(msg)
+      toast.show(msg, 'error')
       setGoogleBusy(false)
     }
   }
@@ -141,7 +143,22 @@ export function WelcomeScreen() {
               </span>
               {googleBusy ? 'جاري التحويل لـ Google...' : `متابعة بـ Google كـ ${role === 'merchant' ? 'تاجر' : role === 'customer' ? 'عميل' : '...'}`}
             </button>
-            <p className="px-2 text-center text-[0.6875rem] leading-5 text-ink-400">بدون كلمة مرور - يرتبط تلقائياً بحساب Gmail</p>
+            {googleError ? (
+              <p className="rounded-xl bg-danger-50 px-3 py-2 text-center text-[0.75rem] font-bold leading-5 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
+                {googleError}
+              </p>
+            ) : (
+              <p className="px-2 text-center text-[0.6875rem] leading-5 text-ink-400">بدون كلمة مرور - يرتبط تلقائياً بحساب Gmail</p>
+            )}
+            {googleBusy ? (
+              <button
+                type="button"
+                onClick={() => setGoogleBusy(false)}
+                className="block w-full text-center text-[0.6875rem] text-ink-400 underline"
+              >
+                إلغاء - الزر معلق؟
+              </button>
+            ) : null}
           </>
         ) : null}
 
@@ -152,15 +169,6 @@ export function WelcomeScreen() {
         <Button variant="ghost" block onClick={() => navigate('/signin')} className="mt-1">
           لديّ حساب — تسجيل الدخول
         </Button>
-        <button
-          type="button"
-          onClick={() => {
-            toast.show('تطبيق الويب: أضفه إلى الشاشة الرئيسية من قائمة المتصفح «تثبيت التطبيق»', 'info')
-          }}
-          className="block w-full px-2 text-center text-[0.6875rem] text-ink-400 underline"
-        >
-          كيف أثبّت التطبيق على الجوال؟
-        </button>
       </div>
 
       <DesignCredit className="pt-5" />

@@ -11,7 +11,6 @@ import { consumePendingRoute } from '@/app/pendingRoute'
 import { disableCloudMode, enableCloudMode } from '@/core/cloudMode'
 import { isSupabaseConfigured } from '@/data/load'
 
-/** رابط «هل نسيت كلمة المرور؟» */
 function ForgotLink() {
   return (
     <Link to="/forgot" className="block py-2 text-center text-[0.8125rem] font-bold text-brand-600 underline">
@@ -33,6 +32,7 @@ export function SignInScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [googleError, setGoogleError] = useState('')
   const [accounts, setAccounts] = useState<DeviceAccount[]>([])
 
   const canSwitchMode = isSupabaseConfigured()
@@ -77,10 +77,14 @@ export function SignInScreen() {
   async function handleGoogleSignIn() {
     if (!canUseGoogle) return
     setGoogleBusy(true)
+    setGoogleError('')
     try {
       await ds.auth.signInWithGoogle?.()
+      setTimeout(() => setGoogleBusy(false), 4000)
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : 'تعذر تسجيل الدخول بـ Google', 'error')
+      const msg = e instanceof Error ? e.message : 'تعذر تسجيل الدخول بـ Google'
+      setGoogleError(msg)
+      toast.show(msg, 'error')
       setGoogleBusy(false)
     }
   }
@@ -204,6 +208,11 @@ export function SignInScreen() {
               </span>
               {googleBusy ? 'جاري التحويل...' : 'المتابعة باستخدام Google'}
             </button>
+            {googleError ? (
+              <p className="rounded-xl bg-danger-50 px-3 py-2 text-center text-[0.75rem] font-bold leading-5 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
+                {googleError}
+              </p>
+            ) : null}
           </>
         ) : null}
 

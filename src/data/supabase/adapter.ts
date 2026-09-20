@@ -595,24 +595,47 @@ export class SupabaseDataSource implements DataSource {
       } catch {
         /* ignore */
       }
+      const redirectTo = `${window.location.origin}/#/`
       const { data, error } = await this.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/#/`,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
           },
         },
       })
-      if (error) mapError(error)
-      // بعض إصدارات supabase-js لا تُعيد التوجيه تلقائياً - نوجّه يدوياً إن وُجد الرابط
-      const url = (data as { url?: string } | null)?.url
-      if (url && typeof window !== 'undefined') {
-        window.location.href = url
-        // ننتظر التوجيه
-        await new Promise((r) => setTimeout(r, 2000))
+      if (error) {
+        // رسالة أوضح للمستخدم
+        const msg = error.message || ''
+        if (/provider.*not.*enabled|provider.*disabled/i.test(msg)) {
+          throw new Error('مزود Google غير مفعل في Supabase - فعّله من Authentication > Providers > Google')
+        }
+        if (/redirect.*mismatch/i.test(msg)) {
+          throw new Error('رابط الإرجاع غير مطابق - تأكد من إضافة https://pyjjaekcqbdijcyloqvx.supabase.co/auth/v1/callback في Google Cloud')
+        }
+        mapError(error)
       }
+      let url = (data as { url?: string } | null)?.url
+      // fallback يدوي إذا لم ترجع المكتبة رابطاً
+      if (!url) {
+        try {
+          const base = (this.client as unknown as { supabaseUrl?: string }).supabaseUrl || ''
+          if (base) {
+            url = `${base}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (url && typeof window !== 'undefined') {
+        // نستخدم assign بدل href لضمان عمله في الجوال
+        window.location.assign(url)
+        await new Promise((r) => setTimeout(r, 3000))
+        return
+      }
+      throw new Error('تعذر إنشاء رابط تسجيل Google - تأكد من تفعيل Google في Supabase')
     },
   }
 
