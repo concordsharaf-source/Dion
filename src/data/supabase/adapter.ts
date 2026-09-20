@@ -590,13 +590,12 @@ export class SupabaseDataSource implements DataSource {
     },
 
     signInWithGoogle: async (role) => {
-      // نحفظ الدور المختار مؤقتاً ليعاد استخدامه بعد العودة من Google
       try {
         if (role) localStorage.setItem('dafatar.pendingRole', role)
       } catch {
         /* ignore */
       }
-      const { error } = await this.client.auth.signInWithOAuth({
+      const { data, error } = await this.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/#/`,
@@ -607,7 +606,13 @@ export class SupabaseDataSource implements DataSource {
         },
       })
       if (error) mapError(error)
-      // لا نرجع جلسة هنا - المتصفح سيُعاد توجيهه إلى Google ثم يعود
+      // بعض إصدارات supabase-js لا تُعيد التوجيه تلقائياً - نوجّه يدوياً إن وُجد الرابط
+      const url = (data as { url?: string } | null)?.url
+      if (url && typeof window !== 'undefined') {
+        window.location.href = url
+        // ننتظر التوجيه
+        await new Promise((r) => setTimeout(r, 2000))
+      }
     },
   }
 
