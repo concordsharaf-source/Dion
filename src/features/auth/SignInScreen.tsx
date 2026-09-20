@@ -33,6 +33,7 @@ export function SignInScreen() {
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleError, setGoogleError] = useState('')
+  const [googleUrl, setGoogleUrl] = useState('')
   const [accounts, setAccounts] = useState<DeviceAccount[]>([])
 
   const canSwitchMode = isSupabaseConfigured()
@@ -78,9 +79,18 @@ export function SignInScreen() {
     if (!canUseGoogle) return
     setGoogleBusy(true)
     setGoogleError('')
+    setGoogleUrl('')
     try {
-      await ds.auth.signInWithGoogle?.()
-      setTimeout(() => setGoogleBusy(false), 4000)
+      const url = await ds.auth.signInWithGoogle?.()
+      if (url && typeof url === 'string') {
+        setGoogleUrl(url)
+        try {
+          window.location.href = url
+        } catch {}
+        setTimeout(() => setGoogleBusy(false), 2000)
+        return
+      }
+      setGoogleBusy(false)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'تعذر تسجيل الدخول بـ Google'
       setGoogleError(msg)
@@ -208,6 +218,14 @@ export function SignInScreen() {
               </span>
               {googleBusy ? 'جاري التحويل...' : 'المتابعة باستخدام Google'}
             </button>
+            {googleUrl ? (
+              <div className="rounded-xl bg-brand-50 p-3 text-center dark:bg-brand-950/30">
+                <p className="text-[0.75rem] font-bold text-brand-800 dark:text-brand-200">إذا لم يتم تحويلك تلقائياً:</p>
+                <a href={googleUrl} className="mt-1 block rounded-xl bg-brand-600 px-4 py-2.5 text-[0.8125rem] font-extrabold text-white">
+                  اضغط هنا لفتح Google
+                </a>
+              </div>
+            ) : null}
             {googleError ? (
               <p className="rounded-xl bg-danger-50 px-3 py-2 text-center text-[0.75rem] font-bold leading-5 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
                 {googleError}

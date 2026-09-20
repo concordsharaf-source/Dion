@@ -595,7 +595,6 @@ export class SupabaseDataSource implements DataSource {
       } catch {
         /* ignore */
       }
-      // للـ hash router نستخدم origin فقط، بدون # - Supabase يعيد التوجيه للـ origin ثم التطبيق يقرأ الـ hash
       const redirectTo = `${window.location.origin}/`
       const { data, error } = await this.client.auth.signInWithOAuth({
         provider: 'google',
@@ -626,17 +625,9 @@ export class SupabaseDataSource implements DataSource {
           /* ignore */
         }
       }
-      if (url && typeof window !== 'undefined') {
-        // محاولة فتح مباشرة - تعمل بشكل أفضل في PWA والجوال
-        try {
-          window.location.assign(url)
-        } catch {
-          window.location.href = url
-        }
-        await new Promise((r) => setTimeout(r, 3000))
-        return
-      }
-      throw new Error('تعذر إنشاء رابط تسجيل Google - تأكد من تفعيل Google في Supabase')
+      if (!url) throw new Error('تعذر إنشاء رابط Google')
+      // نرجع الرابط ليقوم الـ UI بالتوجيه - هذا يضمن عمله في PWA حيث assign من داخل الـ adapter قد يُحجب
+      return url
     },
   }
 

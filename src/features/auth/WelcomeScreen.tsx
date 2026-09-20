@@ -15,6 +15,7 @@ export function WelcomeScreen() {
   const [role, setRole] = useState<Role | null>(null)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleError, setGoogleError] = useState('')
+  const [googleUrl, setGoogleUrl] = useState('')
 
   const canUseGoogle = isSupabaseConfigured()
 
@@ -33,13 +34,26 @@ export function WelcomeScreen() {
     }
     setGoogleBusy(true)
     setGoogleError('')
+    setGoogleUrl('')
     try {
       try {
         localStorage.setItem('dafatar.pendingRole', role)
       } catch {}
-      await ds.auth.signInWithGoogle?.(role)
-      // إذا لم يتم التوجيه خلال 3 ثوان، نعيد الزر
-      setTimeout(() => setGoogleBusy(false), 4000)
+      const url = await ds.auth.signInWithGoogle?.(role)
+      if (url && typeof url === 'string') {
+        setGoogleUrl(url)
+        // محاولة توجيه مباشرة - تعمل في المتصفح العادي
+        // في PWA قد يُحجب، لذا نعرض رابط يدوي أيضاً
+        try {
+          window.location.href = url
+        } catch {
+          // ignore, سيظهر الرابط اليدوي
+        }
+        // لا نعيد busy فوراً - نترك الرابط ظاهراً
+        setTimeout(() => setGoogleBusy(false), 2000)
+        return
+      }
+      setGoogleBusy(false)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'تعذر التسجيل بـ Google'
       setGoogleError(msg)
@@ -143,6 +157,17 @@ export function WelcomeScreen() {
               </span>
               {googleBusy ? 'جاري التحويل لـ Google...' : `متابعة بـ Google كـ ${role === 'merchant' ? 'تاجر' : role === 'customer' ? 'عميل' : '...'}`}
             </button>
+
+            {googleUrl ? (
+              <div className="rounded-xl bg-brand-50 p-3 text-center dark:bg-brand-950/30">
+                <p className="text-[0.75rem] font-bold text-brand-800 dark:text-brand-200">إذا لم يتم تحويلك تلقائياً:</p>
+                <a href={googleUrl} className="mt-1 block rounded-xl bg-brand-600 px-4 py-2.5 text-[0.8125rem] font-extrabold text-white">
+                  اضغط هنا لفتح Google
+                </a>
+                <p className="mt-1 text-[0.625rem] text-ink-400">انسخ الرابط وافتحه في المتصفح إذا كنت في وضع PWA</p>
+              </div>
+            ) : null}
+
             {googleError ? (
               <p className="rounded-xl bg-danger-50 px-3 py-2 text-center text-[0.75rem] font-bold leading-5 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
                 {googleError}
@@ -150,15 +175,6 @@ export function WelcomeScreen() {
             ) : (
               <p className="px-2 text-center text-[0.6875rem] leading-5 text-ink-400">بدون كلمة مرور - يرتبط تلقائياً بحساب Gmail</p>
             )}
-            {googleBusy ? (
-              <button
-                type="button"
-                onClick={() => setGoogleBusy(false)}
-                className="block w-full text-center text-[0.6875rem] text-ink-400 underline"
-              >
-                إلغاء - الزر معلق؟
-              </button>
-            ) : null}
           </>
         ) : null}
 
