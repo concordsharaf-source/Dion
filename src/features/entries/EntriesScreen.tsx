@@ -71,6 +71,9 @@ export function EntriesScreen() {
           : entry.customerPartyId) ?? '',
     )
 
+  // العملية المفتوحة قد لا تكون في القائمة الحالية (فلتر/تقسيم) - نبحث بأمان
+  const selectedEntry = openEntryId ? entries.data?.items.find((e) => e.id === openEntryId) ?? null : null
+
   return (
     <div className="pb-4">
       <header className="app-bar pt-safe">
@@ -151,7 +154,6 @@ export function EntriesScreen() {
         open={openEntryId !== null}
         onClose={() => {
           setOpenEntryId(null)
-          // نظف entryId من الرابط بعد الإغلاق
           if (params.get('entryId') || params.get('open')) {
             const next = new URLSearchParams(params)
             next.delete('entryId')
@@ -159,7 +161,7 @@ export function EntriesScreen() {
             setParams(next, { replace: true })
           }
         }}
-        partyName={openEntryId ? nameFor(entries.data?.items.find((e) => e.id === openEntryId) as FinancialEntry) : undefined}
+        partyName={selectedEntry ? nameFor(selectedEntry) : undefined}
       />
     </div>
   )
