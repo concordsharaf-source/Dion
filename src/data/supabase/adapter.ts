@@ -595,7 +595,8 @@ export class SupabaseDataSource implements DataSource {
       } catch {
         /* ignore */
       }
-      const redirectTo = `${window.location.origin}/#/`
+      // للـ hash router نستخدم origin فقط، بدون # - Supabase يعيد التوجيه للـ origin ثم التطبيق يقرأ الـ hash
+      const redirectTo = `${window.location.origin}/`
       const { data, error } = await this.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -607,7 +608,6 @@ export class SupabaseDataSource implements DataSource {
         },
       })
       if (error) {
-        // رسالة أوضح للمستخدم
         const msg = error.message || ''
         if (/provider.*not.*enabled|provider.*disabled/i.test(msg)) {
           throw new Error('مزود Google غير مفعل في Supabase - فعّله من Authentication > Providers > Google')
@@ -618,20 +618,21 @@ export class SupabaseDataSource implements DataSource {
         mapError(error)
       }
       let url = (data as { url?: string } | null)?.url
-      // fallback يدوي إذا لم ترجع المكتبة رابطاً
       if (!url) {
         try {
-          const base = (this.client as unknown as { supabaseUrl?: string }).supabaseUrl || ''
-          if (base) {
-            url = `${base}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
-          }
+          const base = (this.client as unknown as { supabaseUrl?: string }).supabaseUrl || 'https://pyjjaekcqbdijcyloqvx.supabase.co'
+          url = `${base}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
         } catch {
           /* ignore */
         }
       }
       if (url && typeof window !== 'undefined') {
-        // نستخدم assign بدل href لضمان عمله في الجوال
-        window.location.assign(url)
+        // محاولة فتح مباشرة - تعمل بشكل أفضل في PWA والجوال
+        try {
+          window.location.assign(url)
+        } catch {
+          window.location.href = url
+        }
         await new Promise((r) => setTimeout(r, 3000))
         return
       }
