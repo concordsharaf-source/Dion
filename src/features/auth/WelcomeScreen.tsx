@@ -4,7 +4,8 @@ import { Store, User, ShieldCheck, WifiOff, Link2 } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
 import { DesignCredit } from '@/components/DesignCredit'
 import { useDataSource, useDataSourceKind } from '@/app/DataSourceProvider'
-import { isSupabaseConfigured } from '@/data/load'
+import { isSupabaseConfigured, createCloudSource } from '@/data/load'
+import { enableCloudMode } from '@/core/cloudMode'
 import type { Role } from '@/core/domain'
 
 export function WelcomeScreen() {
@@ -39,21 +40,31 @@ export function WelcomeScreen() {
       try {
         localStorage.setItem('dafatar.pendingRole', role)
       } catch {}
-      const url = await ds.auth.signInWithGoogle?.(role)
+      // المحرّك قد يكون محلياً (قبل تفعيل السحابي) - ننشئ مصدر سحابي مؤقتاً للحصول على رابط Google
+      let url: string | void = undefined
+      if (ds.auth.signInWithGoogle) {
+        url = await ds.auth.signInWithGoogle(role)
+      } else if (isSupabaseConfigured()) {
+        // وضع الجهاز لكن مفاتيح Supabase موجودة - ننشئ مصدر سحابي مؤقت
+        const cloud = await createCloudSource()
+        url = await cloud.auth.signInWithGoogle?.(role)
+        // فعّل الوضع السحابي قبل التوجيه
+        enableCloudMode()
+      }
       if (url && typeof url === 'string') {
         setGoogleUrl(url)
-        // محاولة توجيه مباشرة - تعمل في المتصفح العادي
-        // في PWA قد يُحجب، لذا نعرض رابط يدوي أيضاً
         try {
           window.location.href = url
         } catch {
-          // ignore, سيظهر الرابط اليدوي
+          /* سيظهر الرابط اليدوي */
         }
-        // لا نعيد busy فوراً - نترك الرابط ظاهراً
         setTimeout(() => setGoogleBusy(false), 2000)
         return
       }
       setGoogleBusy(false)
+      if (!url) {
+        setGoogleError('تعذر إنشاء رابط Google - تأكد من تفعيل Google في Supabase')
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'تعذر التسجيل بـ Google'
       setGoogleError(msg)
