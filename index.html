@@ -67,8 +67,18 @@
             skipped = window.sessionStorage.getItem('dafatar.install-gate-skip') === '1'
           } catch (e) {}
 
-          var gating = query === 'off' || query === 'skip' ? false : query === 'force' ? true : !standalone && !skipped
+          // بلا إنترنت ⇒ لا بوابة: التطبيق يعمل محليًا، والتثبيت يحتاج شبكة أصلًا
+          var offline = navigator.onLine === false
+          var gating =
+            query === 'off' || query === 'skip' ? false : query === 'force' ? true : !standalone && !skipped && !offline
           root.setAttribute('data-install-gate', gating ? 'gate' : 'app')
+
+          // حارس زمن: لو لم يصل /install-gate/app.js (كاش قديم/404/شبكة ضعيفة) نكشف التطبيق
+          if (gating) {
+            window.__igWatchdog = window.setTimeout(function () {
+              if (!window.__igReady) root.setAttribute('data-install-gate', 'app')
+            }, 2500)
+          }
         } catch (e) {
           root.setAttribute('data-install-gate', 'app')
         }

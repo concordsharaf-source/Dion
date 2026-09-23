@@ -25,6 +25,7 @@ interface GateApi {
   isIOS: () => boolean
   isIOSNativeBrowser: () => boolean
   isDevHost: () => boolean
+  isOffline: () => boolean
   install: () => void
   skip: () => void
   config: { allowSkip: boolean; skipKey: string; queryParam: string; devHosts: string[] }
@@ -61,8 +62,10 @@ let standaloneNow = false
 let userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 let platform = 'MacIntel'
 let maxTouchPoints = 0
+let onlineNow = true
 
-function setEnv(next: { standalone?: boolean; ua?: string; platform?: string; maxTouchPoints?: number }) {
+function setEnv(next: { standalone?: boolean; ua?: string; platform?: string; maxTouchPoints?: number; online?: boolean }) {
+  if (next.online !== undefined) onlineNow = next.online
   if (next.standalone !== undefined) standaloneNow = next.standalone
   if (next.ua !== undefined) userAgent = next.ua
   if (next.platform !== undefined) platform = next.platform
@@ -107,6 +110,7 @@ beforeAll(() => {
   Object.defineProperty(window.navigator, 'userAgent', { configurable: true, get: () => userAgent })
   Object.defineProperty(window.navigator, 'platform', { configurable: true, get: () => platform })
   Object.defineProperty(window.navigator, 'maxTouchPoints', { configurable: true, get: () => maxTouchPoints })
+  Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => onlineNow })
   // لا navigator.standalone في jsdom (خاصية سفاري على iOS)
   Object.defineProperty(window.navigator, 'standalone', { configurable: true, get: () => undefined })
 
@@ -116,7 +120,7 @@ beforeAll(() => {
 })
 
 afterEach(() => {
-  setEnv({ standalone: false, ua: userAgent, platform: 'MacIntel', maxTouchPoints: 0 })
+  setEnv({ standalone: false, ua: userAgent, platform: 'MacIntel', maxTouchPoints: 0, online: true })
   window.sessionStorage.clear()
 })
 
@@ -247,6 +251,53 @@ describe('المتصفحات بلا beforeinstallprompt والتجاوزات', (
     win.PwaInstallGate.config.devHosts = []
     win.PwaInstallGate.refresh()
     expect(isHidden('install-skip')).toBe(true)
+  })
+})
+
+describe('بلا إنترنت — التطبيق يقلع ولا يطالب بالنت', () => {
+  it('onLine=false ⇒ البوابة لا تُغلق التطبيق', () => {
+    resetDom()
+    setEnv({ online: false })
+    win.PwaInstallGate.refresh()
+
+    expect(mode()).toBe('app')
+    expect(win.PwaInstallGate.decide().reason).toBe('offline')
+    expect(id('app-content')?.hasAttribute('aria-hidden')).toBe(false)
+    expect(id('app-content')?.hasAttribute('inert')).toBe(false)
+    expect(win.PwaInstallGate.isOffline()).toBe(true)
+  })
+
+  it('العودة للشبكة في نفس الجلسة لا تُغلق الباب مجددًا أثناء الاستخدام', () => {
+    resetDom()
+    setEnv({ online: false })
+    win.PwaInstallGate.refresh()
+    expect(mode()).toBe('app')
+
+    setEnv({ online: true })
+    window.dispatchEvent(new Event('online'))
+    expect(mode()).toBe('app')
+
+    // وبعد إعادة تحميل الصفحة (تصنيف جديد) تعود البوابة في وضع المتصفح
+    resetDom()
+    win.PwaInstallGate.refresh()
+    expect(mode()).toBe('gate')
+  })
+
+  it('انقطعت الشبكة أثناء عرض البوابة ⇒ تُكشف التطبيق فورًا', () => {
+    resetDom()
+    win.PwaInstallGate.refresh()
+    expect(mode()).toBe('gate')
+
+    setEnv({ online: false })
+    window.dispatchEvent(new Event('offline'))
+    expect(mode()).toBe('app')
+    expect(win.PwaInstallGate.decide().reason).toBe('offline')
+  })
+
+  it('index.html: المصنّف يعرف offline وفيه حارس زمن لو لم يصل app.js', () => {
+    expect(indexSource).toContain('navigator.onLine === false')
+    expect(indexSource).toContain('__igWatchdog')
+    expect(indexSource).toContain('if (!window.__igReady) root.setAttribute(\'data-install-gate\', \'app\')')
   })
 })
 

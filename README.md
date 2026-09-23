@@ -106,6 +106,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 - **iOS Safari:** لا `beforeinstallprompt` ⇒ الزر مخفي وتظهر ثلاث خطوات مرقّمة: «مشاركة» ← «إضافة إلى الشاشة الرئيسية» ← «إضافة». نميّز سفاري الأصلية بوسم `Version/…Safari` (كل متصفحات iOS WebKit)؛ والمتصفحات داخل التطبيقات وفايرفوكس تأخذ الدليل اليدوي.
 - **إعادة التصنيف عند «الدخول» فقط:** `visibilitychange` / `pageshow` / `focus` / تغيّر `display-mode` / `appinstalled` — بلا أي نافذة منبثقة أثناء الاستخدام.
 - **لا شاشة بيضاء:** ظهور البوابة مربوط بخاصية `data-install-gate` التي يضبطها سكربت مصغّر في `<head>` قبل أول رسم؛ وأي استثناء في `app.js` أو تعطّله ⇒ `data-install-gate="app"` (التطبيق يعمل).
+- **بلا إنترنت ⇒ بلا بوابة:** إذا كانت `navigator.onLine === false` يُفتح التطبيق مباشرة (كل شيء محلي، والتثبيت يحتاج شبكة أصلًا) — ولا نعاود الإغلاق أثناء الجلسة؛ ولو لم يصل `install-gate/app.js` (كاش قديم/404) يكشف `<head>` التطبيق تلقائيًا بعد 2.5 ثانية (`__igWatchdog` + `__igReady`).
 - **مفاتيح التحكّم:** `?installgate=off` (تجاهل البوابة لهذه الجلسة، تُخزَّن في `sessionStorage`) · `?installgate=force` (اختبار الشاشة في وضع standalone) · `CONFIG.allowSkip` في `app.js` إن أردت رابط «المتابعة في المتصفح» للجميع.
 - **منطق البوابة مُختبَر:** `src/app/installGate.test.ts` (14 اختبارًا) يقيّم `public/install-gate/app.js` نفسه داخل jsdom ويقلّب: standalone، iOS، معامِلات الرابط، وربط `beforeinstallprompt`.
 - **ملاحظة نشر:** الأصول بمسارات مطلقة (`/install-gate/…`) — إن نُشر المشروع في مسار فرعي فاستخدم `base` في `vite.config.ts` وروابط نسبية.

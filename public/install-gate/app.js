@@ -54,6 +54,13 @@
   var installed = false
   var listenersBound = false
 
+  /* وصل السكربت ⇒ لا حاجة للحارس الزمني الذي نصّبه مصنّف index.html */
+  global.__igReady = true
+  if (global.__igWatchdog) {
+    global.clearTimeout(global.__igWatchdog)
+    global.__igWatchdog = null
+  }
+
   /* ================================ أدوات ================================ */
 
   function el(id) {
@@ -156,10 +163,16 @@
   }
 
   /** القرار النهائي: 'gate' (وضع المتصفح) أم 'app' (تطبيق مثبّت/تجاوز) */
+  function isOffline() {
+    return Boolean(global.navigator) && global.navigator.onLine === false
+  }
+
   function decide() {
     var flag = queryFlag()
     if (flag === 'off' || flag === 'skip') return { mode: 'app', reason: 'param' }
     if (flag === 'force') return { mode: 'gate', reason: 'force' }
+    // انقطاع الشبكة ⇒ التطبيق يعمل بلا بوابة: لا نطالب بالإنترنت إلا عند الضرورة
+    if (isOffline()) return { mode: 'app', reason: 'offline' }
     if (isStandalone()) return { mode: 'app', reason: 'standalone' }
     if (read(CONFIG.skipKey) === '1') return { mode: 'app', reason: 'skipped' }
     return { mode: 'gate', reason: 'browser' }
@@ -350,6 +363,11 @@
     // 2) أزرار البوابة (تثبيت / تجاوز / تحديث) — بتفويض الأحداث على document
     doc.addEventListener('click', handleClick)
 
+    // انقطعت الشبكة ونحن نعرض البوابة ⇒ اكشف التطبيق فورًا
+    global.addEventListener('offline', function () {
+      apply()
+    })
+
     // 3) إعادة التصنيف عند «الدخول» فقط — لا أثناء الاستخدام
     var recheck = function () {
       apply()
@@ -392,6 +410,7 @@
     isIOSNativeBrowser: isIOSNativeBrowser,
     supportsBeforeInstallPrompt: supportsBeforeInstallPrompt,
     isDevHost: isDevHost,
+    isOffline: isOffline,
     hasPrompt: function () {
       return Boolean(deferredPrompt)
     },
