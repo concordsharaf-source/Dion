@@ -10,9 +10,13 @@ import { useEffect } from 'react'
 export function AppShell() {
   const location = useLocation()
 
-  // العودة لأعلى الصفحة عند تغيير المسار
+  // العودة لأعلى الصفحة عند تغيير المسار — بحرس: بعض المحركات/البيئات لا
+  // تنفّذ Element.scrollTo (jsdom في الاختبارات مثلًا)، فنسقط إلى scrollTop.
   useEffect(() => {
-    document.querySelector<HTMLElement>('.app-scroll')?.scrollTo({ top: 0, behavior: 'auto' })
+    const scroller = document.querySelector<HTMLElement>('.app-scroll')
+    if (!scroller) return
+    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top: 0, behavior: 'auto' })
+    else scroller.scrollTop = 0
   }, [location.pathname])
 
   return (
