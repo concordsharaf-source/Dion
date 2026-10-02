@@ -11,12 +11,17 @@
 const FALLBACK_VAPID_PUBLIC_KEY = 'BIQ-Xe9ivmpVy6eftxhHyHYroqO33tI1q5aFYaQefnrN7WNHAQcgg7POuDSMaAr5EnKGZigLvy_ft-lwQ7dCEIg'
 
 export function getVapidPublicKey(): string {
-  const fromEnv = ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
-  if (fromEnv && fromEnv !== '<vapid-public-key>' && fromEnv.length > 20) {
-    return fromEnv
+  const envVal = import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined
+  // عند عدم توفر متغير البيئة إطلاقًا (مثل التشغيل المحلي بدون ملف .env) نستخدم المفتاح الافتراضي
+  if (envVal === undefined) {
+    return FALLBACK_VAPID_PUBLIC_KEY
   }
-  // fallback للمفتاح المعروف في المشروع حتى يعمل حتى بدون .env
-  return FALLBACK_VAPID_PUBLIC_KEY
+  const trimmed = envVal.trim()
+  if (trimmed && trimmed !== '<vapid-public-key>' && trimmed.length > 20) {
+    return trimmed
+  }
+  // إذا تم ضبط المتغير بشكل صريح إلى قيمة فارغة أو القيمة الافتراضية التوضيحية تعتبر المفتاح غير مضبوط
+  return ''
 }
 
 interface NavLike {
