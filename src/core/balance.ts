@@ -139,36 +139,59 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
     if (bucket) bucket.push(entry)
   }
 
+  // Single-pass computation per party for high performance on long entry histories
   return parties.map((party) => {
     const list = byParty.get(party.id) ?? []
-    const totals = computeTotals(list, viewerId)
+
+    let totalDebt = 0
+    let totalPaid = 0
+    let confirmedCount = 0
+    let pendingCount = 0
     let lastActivityAt: string | null = null
     let legacyRemaining = 0
     let legacyCount = 0
+    let hasPendingForMe = false
+
     for (const e of list) {
       const at = e.occurredAt || e.createdAt
       if (!lastActivityAt || at > lastActivityAt) lastActivityAt = at
-      if (e.status === 'confirmed' && e.excludedFromBalance) {
-        legacyRemaining += entryEffect(e)
-        legacyCount += 1
+
+      if (e.status === 'confirmed') {
+        if (e.excludedFromBalance) {
+          legacyRemaining = addMinor(legacyRemaining, entryEffect(e))
+          legacyCount += 1
+        } else {
+          const effect = entryEffect(e)
+          if (effect >= 0) totalDebt = addMinor(totalDebt, effect)
+          else totalPaid = addMinor(totalPaid, -effect)
+          confirmedCount += 1
+        }
+        continue
+      }
+
+      if (e.status === 'pending') {
+        pendingCount += 1
+        if (e.scope === 'shared' && e.creatorId !== viewerId) {
+          hasPendingForMe = true
+        }
       }
     }
-    const hasPendingForMe = list.some(
-      (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
-    )
+
+    const remaining = subMinor(totalDebt, totalPaid)
+
     return {
       party,
-      totalDebt: totals.totalDebt,
-      totalPaid: totals.totalPaid,
-      remaining: totals.remaining,
-      ratio: paymentRatio(totals.totalPaid, totals.totalDebt),
+      totalDebt,
+      totalPaid,
+      remaining,
+      ratio: paymentRatio(totalPaid, totalDebt),
       lastActivityAt,
-      entryCount: totals.confirmedCount,
+      entryCount: confirmedCount,
       hasPendingForMe,
-      pendingCount: totals.pendingCount,
+      pendingCount,
       legacyRemaining,
       legacyCount,
-      isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      isFullyPaid: totalDebt > 0 && remaining <= 0,
     }
   })
 }
