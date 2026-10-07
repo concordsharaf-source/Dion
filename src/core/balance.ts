@@ -121,6 +121,12 @@ export interface PartySummary {
   legacyRemaining: Minor
   legacyCount: number
   isFullyPaid: boolean
+  /**
+   * ⚡ تحسين الأداء: نص البحث ورقم الهاتف الموحدان مسبقًا.
+   * يُحسبان عند إنشاء الملخص لتجنب تشغيل 13+ تعبير نمطي (regex) لكل طرف على كل ضغطة مفتاح أثناء البحث.
+   */
+  normalizedHaystack?: string
+  normalizedPhone?: string
 }
 
 /**
@@ -156,6 +162,10 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
     const hasPendingForMe = list.some(
       (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
     )
+    // ⚡ Bolt Optimization: Pre-normalize search target strings once per party summary creation
+    const normalizedHaystack = `${normalizeArabic(party.name)} ${normalizeArabic(party.note ?? '')} ${normalizeArabic(party.address ?? '')}`
+    const normalizedPhone = party.phone ? normalizePhone(party.phone) : ''
+
     return {
       party,
       totalDebt: totals.totalDebt,
@@ -169,6 +179,8 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
       legacyRemaining,
       legacyCount,
       isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      normalizedHaystack,
+      normalizedPhone,
     }
   })
 }
@@ -242,9 +254,16 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
+
+    // ⚡ Bolt Optimization: Use pre-computed normalized haystack and phone string
+    // to avoid executing ~13 regex operations per party item on every keystroke during typing.
+    const haystack =
+      s.normalizedHaystack ??
+      `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
     if (haystack.includes(q)) return true
-    if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
+
+    const phone = s.normalizedPhone ?? (s.party.phone ? normalizePhone(s.party.phone) : '')
+    if (qIsPhone && phone && phone.includes(phoneQuery)) return true
     return false
   })
 

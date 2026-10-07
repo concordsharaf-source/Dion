@@ -4,6 +4,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as pushCore from '@/core/push'
 import { getVapidPublicKey, isPermissionGranted, isPushSupported, pushTargetUrl, pushTitle } from '@/core/push'
 import { disablePush, enablePush, pushSupported, toStored, urlBase64ToUint8Array } from './push'
 import type { PushPort } from '@/data/port'
@@ -114,7 +115,7 @@ describe('تفعيل الإشعارات', () => {
   })
 
   it('بلا مفتاح VAPID: رسالة واضحة ولا اشتراك (لا فشل صامت)', async () => {
-    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '')
+    vi.spyOn(pushCore, 'getVapidPublicKey').mockReturnValue('')
     installPushEnv(fakeSubscription('https://push.example/one'))
     const port = makePort()
     const result = await enablePush(port)
