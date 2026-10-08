@@ -121,6 +121,10 @@ export interface PartySummary {
   legacyRemaining: Minor
   legacyCount: number
   isFullyPaid: boolean
+  /** نص البحث الموحد المسبق الحساب لتسريع تصفية القوائم */
+  searchKey?: string
+  /** رقم الهاتف الموحد المسبق الحساب لتسريع تصفية القوائم */
+  phoneKey?: string
 }
 
 /**
@@ -156,6 +160,10 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
     const hasPendingForMe = list.some(
       (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
     )
+    // حساب مفاتيح البحث مسبقًا تجنبًا لتكرار التطبييق والتعابير النمطية المعقدة عند كتابة البحث
+    const searchKey = `${normalizeArabic(party.name)} ${normalizeArabic(party.note ?? '')} ${normalizeArabic(party.address ?? '')}`
+    const phoneKey = party.phone ? normalizePhone(party.phone) : ''
+
     return {
       party,
       totalDebt: totals.totalDebt,
@@ -169,6 +177,8 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
       legacyRemaining,
       legacyCount,
       isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      searchKey,
+      phoneKey,
     }
   })
 }
@@ -242,9 +252,13 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
+    // استخدام النصوص المعالجة مسبقًا لتسريع البحث ومنع استهلاك المعالج مع كل حرف يُكتب
+    const haystack =
+      s.searchKey ??
+      `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
     if (haystack.includes(q)) return true
-    if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
+    const phone = s.phoneKey ?? (s.party.phone ? normalizePhone(s.party.phone) : '')
+    if (qIsPhone && phone.includes(phoneQuery)) return true
     return false
   })
 
