@@ -4,7 +4,7 @@ import { ListOrdered } from 'lucide-react'
 import clsx from 'clsx'
 import { Card, EmptyState, Money, Skeletons } from '@/components/ui'
 import { useProfile } from '@/app/hooks/useAuth'
-import { useEntries, useFilteredParties } from '@/app/hooks/useData'
+import { useEntries, useParties } from '@/app/hooks/useData'
 import { computeTotals } from '@/core/balance'
 import { dayGroupLabel } from '@/core/datetime'
 import { EntryRow } from './EntryRow'
@@ -35,16 +35,17 @@ export function EntriesScreen() {
 
   const query = useMemo<EntryQuery>(() => ({ status: 'all', filter, limit: 200 }), [filter])
   const entries = useEntries(query)
-  const parties = useFilteredParties({})
+  // Bolt Optimization: useParties avoids fetching 1000 entries and calculating financial summaries for parties when only names are needed
+  const parties = useParties({ includeArchived: true, limit: 1000 })
 
   const viewerId = profile.data?.id ?? ''
   const currency = profile.data?.currency ?? 'YER'
 
   const partyNames = useMemo(() => {
     const map = new Map<string, string>()
-    for (const s of parties.all) map.set(s.party.id, s.party.name)
+    for (const p of parties.data?.items ?? []) map.set(p.id, p.name)
     return map
-  }, [parties.all])
+  }, [parties.data?.items])
 
   const totals = useMemo(
     () => (entries.data ? computeTotals(entries.data.items, viewerId) : null),
