@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertCircle, BellRing, ChevronLeft, Plus, Store, TrendingUp, User, Users } from 'lucide-react'
 import { Button, Card, EmptyState, Money, SectionTitle, Skeletons } from '@/components/ui'
@@ -20,6 +20,10 @@ export function HomeScreen() {
 
   const [openType, setOpenType] = useState<EntryType | null>(null)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
+
+  const handleOpenEntry = useCallback((id: string) => {
+    setOpenEntryId(id)
+  }, [])
 
   const isMerchant = profile.data?.role === 'merchant'
   const currency = profile.data?.currency ?? 'YER'
@@ -194,7 +198,7 @@ export function HomeScreen() {
                   partyName={partyNames.get(
                     (entry.scope === 'solo' ? entry.partyId : entry.merchantUserId === viewerId ? entry.merchantPartyId : entry.customerPartyId) ?? '',
                   )}
-                  onOpen={() => setOpenEntryId(entry.id)}
+                  onOpen={handleOpenEntry}
                 />
               ))}
             </Card>

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import clsx from 'clsx'
 import { ArrowDownLeft, ArrowUpRight, RotateCcw } from 'lucide-react'
 import { Money, StatusChip } from '@/components/ui'
@@ -6,8 +7,9 @@ import type { FinancialEntry } from '@/core/domain'
 
 /**
  * صف عملية مالية — يعرض الأثر والمبلغ والحالة بوضوح
+ * ممفّظ بـ React.memo لمنع إعادات الرسم غير الضرورية عند تحديث مكونات الأب
  */
-export function EntryRow({
+export const EntryRow = memo(function EntryRow({
   entry,
   viewerId,
   partyName,
@@ -18,7 +20,7 @@ export function EntryRow({
   viewerId: string
   partyName?: string
   currency?: string
-  onOpen?: () => void
+  onOpen?: (id: string) => void
 }) {
   const isPayment = entry.entryType === 'payment'
   const isReversal = entry.entryKind === 'reversal'
@@ -46,7 +48,7 @@ export function EntryRow({
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={onOpen ? () => onOpen(entry.id) : undefined}
       className={clsx(
         'flex w-full items-center gap-3 border-b border-ink-200/70 px-4 py-3 text-start transition last:border-0 dark:border-ink-800/70',
         onOpen && 'active:bg-ink-100/70 dark:active:bg-ink-900',
@@ -84,4 +86,4 @@ export function EntryRow({
       </span>
     </button>
   )
-}
+})

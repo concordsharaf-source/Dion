@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, Link2Off, Scale, ShieldCheck } from 'lucide-react'
 import { Button, Card, ConfirmDialog, EmptyState, Money, SectionTitle, Sheet, Skeletons, useToast } from '@/components/ui'
@@ -28,6 +28,10 @@ export function RelationshipDetailScreen() {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
+
+  const handleOpenEntry = useCallback((id: string) => {
+    setOpenEntryId(id)
+  }, [])
 
   const viewerId = profile.data?.id ?? ''
   const currency = profile.data?.currency ?? 'YER'
@@ -278,7 +282,7 @@ export function RelationshipDetailScreen() {
                   viewerId={viewerId}
                   currency={currency}
                   partyName={counterpartyName ?? undefined}
-                  onOpen={() => setOpenEntryId(entry.id)}
+                  onOpen={handleOpenEntry}
                 />
               ))}
             </Card>

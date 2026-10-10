@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ListOrdered } from 'lucide-react'
 import clsx from 'clsx'
@@ -62,14 +62,21 @@ export function EntriesScreen() {
     return out
   }, [entries.data])
 
-  const nameFor = (entry: FinancialEntry): string | undefined =>
-    partyNames.get(
-      (entry.scope === 'solo'
-        ? entry.partyId
-        : entry.merchantUserId === viewerId
-          ? entry.merchantPartyId
-          : entry.customerPartyId) ?? '',
-    )
+  const nameFor = useCallback(
+    (entry: FinancialEntry): string | undefined =>
+      partyNames.get(
+        (entry.scope === 'solo'
+          ? entry.partyId
+          : entry.merchantUserId === viewerId
+            ? entry.merchantPartyId
+            : entry.customerPartyId) ?? '',
+      ),
+    [partyNames, viewerId],
+  )
+
+  const handleOpenEntry = useCallback((id: string) => {
+    setOpenEntryId(id)
+  }, [])
 
   // العملية المفتوحة قد لا تكون في القائمة الحالية (فلتر/تقسيم) - نبحث بأمان
   const selectedEntry = openEntryId ? entries.data?.items.find((e) => e.id === openEntryId) ?? null : null
@@ -139,7 +146,7 @@ export function EntriesScreen() {
                       viewerId={viewerId}
                       currency={currency}
                       partyName={nameFor(entry)}
-                      onOpen={() => setOpenEntryId(entry.id)}
+                      onOpen={handleOpenEntry}
                     />
                   ))}
                 </Card>

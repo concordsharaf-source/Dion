@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FileText, Link2, Pencil, Phone, Plus, TrendingUp } from 'lucide-react'
 import { Button, Card, Chip, EmptyState, Money, SectionTitle, Skeletons } from '@/components/ui'
@@ -25,6 +25,10 @@ export function PartyDetailScreen() {
   const [openType, setOpenType] = useState<EntryType | null>(null)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
+
+  const handleOpenEntry = useCallback((id: string) => {
+    setOpenEntryId(id)
+  }, [])
 
   const viewerId = profile.data?.id ?? ''
   const currency = profile.data?.currency ?? 'YER'
@@ -230,7 +234,7 @@ export function PartyDetailScreen() {
                         entry={entry}
                         viewerId={viewerId}
                         currency={currency}
-                        onOpen={() => setOpenEntryId(entry.id)}
+                        onOpen={handleOpenEntry}
                       />
                     ))}
                   </Card>
