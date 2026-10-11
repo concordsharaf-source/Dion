@@ -11,12 +11,15 @@
 const FALLBACK_VAPID_PUBLIC_KEY = 'BIQ-Xe9ivmpVy6eftxhHyHYroqO33tI1q5aFYaQefnrN7WNHAQcgg7POuDSMaAr5EnKGZigLvy_ft-lwQ7dCEIg'
 
 export function getVapidPublicKey(): string {
-  const fromEnv = ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
-  if (fromEnv && fromEnv !== '<vapid-public-key>' && fromEnv.length > 20) {
-    return fromEnv
+  const rawEnv = import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined
+  if (rawEnv === undefined || rawEnv.trim() === '<vapid-public-key>') {
+    return FALLBACK_VAPID_PUBLIC_KEY
   }
-  // fallback للمفتاح المعروف في المشروع حتى يعمل حتى بدون .env
-  return FALLBACK_VAPID_PUBLIC_KEY
+  const trimmed = rawEnv.trim()
+  if (trimmed && trimmed.length > 20) {
+    return trimmed
+  }
+  return ''
 }
 
 interface NavLike {

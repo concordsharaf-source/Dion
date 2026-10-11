@@ -121,6 +121,10 @@ export interface PartySummary {
   legacyRemaining: Minor
   legacyCount: number
   isFullyPaid: boolean
+  /** نص البحث المعالج مسبقًا لتسريع عملية الفلترة عند كل حرف يُكتب */
+  normalizedSearch?: string
+  /** رقم الهاتف المعالج مسبقًا لتسريع الفلترة */
+  normalizedPhone?: string
 }
 
 /**
@@ -156,6 +160,10 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
     const hasPendingForMe = list.some(
       (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
     )
+    // معالجة مسبقة لنصوص البحث والهاتف لمنع تكرار التعابير النمطية في فلترة القائمة
+    const normalizedSearch = `${normalizeArabic(party.name)} ${normalizeArabic(party.note ?? '')} ${normalizeArabic(party.address ?? '')}`
+    const normalizedPhone = party.phone ? normalizePhone(party.phone) : ''
+
     return {
       party,
       totalDebt: totals.totalDebt,
@@ -169,6 +177,8 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
       legacyRemaining,
       legacyCount,
       isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      normalizedSearch,
+      normalizedPhone,
     }
   })
 }
@@ -230,6 +240,9 @@ export interface FilterOptions {
   onlyPending?: boolean
 }
 
+/** إعادة استخدام المقارن العربي لتفادي إعادة الإنشاء أثناء عمليات الترتيب */
+const arCollator = new Intl.Collator('ar')
+
 export function filterAndSortParties(summaries: PartySummary[], opts: FilterOptions = {}): PartySummary[] {
   const { query = '', sort = 'recent_activity', includeArchived = false, onlyWithBalance = false, onlyPending = false } = opts
 
@@ -242,13 +255,18 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
+
+    // استخدام النص ورقم الهاتف المعالجين مسبقًا لتفادي المعالجة المكررة مع كل ضغطة مفتاح
+    const haystack = s.normalizedSearch ?? `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
     if (haystack.includes(q)) return true
-    if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
+
+    const phone = s.normalizedPhone ?? (s.party.phone ? normalizePhone(s.party.phone) : '')
+    if (qIsPhone && phone && phone.includes(phoneQuery)) return true
+
     return false
   })
 
-  const byName = (a: PartySummary, b: PartySummary) => a.party.name.localeCompare(b.party.name, 'ar')
+  const byName = (a: PartySummary, b: PartySummary) => arCollator.compare(a.party.name, b.party.name)
 
   list = [...list].sort((a, b) => {
     switch (sort) {
