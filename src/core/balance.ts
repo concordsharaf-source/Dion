@@ -194,20 +194,32 @@ export const PARTY_SORT_LABELS: Record<PartySort, string> = {
   newest: 'الأحدث إضافة',
 }
 
-/** توحيد النص العربي للبحث: إزالة التشكيل وتوحيد الألف والهاء */
+/** خريطة استبدال الأحرف العربية والأرقام لتسريع التوحيد في ممر واحد */
+const ARABIC_NORM_MAP: Record<string, string> = {
+  'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا',
+  'ى': 'ي', 'ئ': 'ي',
+  'ؤ': 'و',
+  'ة': 'ه',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+}
+
+/** تعبير نمطي واحد يشمل التشكيل والتطويل والأحرف المراد استبدالها والمسافات المتعددة */
+const ARABIC_NORM_REGEX = /[\u064B-\u0652\u0670\u0640]|[\u0622\u0623\u0625\u0671ىئؤة٠-٩۰-۹]|\s+/g
+
+/**
+ * توحيد النص العربي للبحث: إزالة التشكيل وتوحيد الألف والهاء والأرقام.
+ * Bolt ⚡: تم تحسين الدالة لتعمل بممر استبدال واحد (Single-pass Regex) بدلاً من 10 استبدالات متتالية،
+ * مما يقلل الإنشاء المؤقت للسلاسل ويقلل زمني التنفيذ أثناء البحث والتصفية.
+ */
 export function normalizeArabic(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[\u064B-\u0652\u0670\u0640]/g, '') // تشكيل وتطويل
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-    .replace(/\s+/g, ' ')
+  const trimmed = input.trim().toLowerCase()
+  if (!trimmed) return ''
+  return trimmed.replace(ARABIC_NORM_REGEX, (m) => {
+    if (ARABIC_NORM_MAP[m] !== undefined) return ARABIC_NORM_MAP[m]
+    if (/^\s+$/.test(m)) return ' '
+    return ''
+  })
 }
 
 /** أرقام فقط للمقارنة بالهاتف — بلا مفتاح دولة وبلا صفر بداية */
