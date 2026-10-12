@@ -1,0 +1,3 @@
+## 2025-05-18 - Single-Pass Regex with Map Lookup for Arabic String Normalization
+**Learning:** Chaining multiple string replacement regex calls (`.replace(/.../g, '')`) in string normalization functions causes multiple intermediate string allocations and passes. Consolidating into a single pass regex with a lookup map improves normalization efficiency during frequent search, filter, and database key operations. Care must be taken so that whitespace matches (`\s+`) are correctly converted to a single space `" "` rather than stripped or incorrectly replaced.
+**Action:** Use a single-pass regex with map lookup for multi-character normalization, ensuring whitespace regex branches (`/^\s+$/`) return `" "`.
