@@ -128,47 +128,89 @@ export interface PartySummary {
  * O(n) على العمليات — تُستخدم مباشرة في القوائم مع البحث والترتيب.
  */
 export function summarizeParties(parties: Party[], entries: FinancialEntry[], viewerId: string): PartySummary[] {
-  const byParty = new Map<string, FinancialEntry[]>()
-  for (const party of parties) byParty.set(party.id, [])
+  // تجميع الحسابات وتصنيفها في مرور واحد O(P + E) بدلاً من التكرار والترشيح المتكرر
+  type PartyStats = {
+    totalDebt: Minor
+    totalPaid: Minor
+    confirmedCount: number
+    pendingDebt: Minor
+    pendingPaid: Minor
+    pendingCount: number
+    awaitingMyActionCount: number
+    rejectedCount: number
+    lastActivityAt: string | null
+    hasPendingForMe: boolean
+    legacyRemaining: Minor
+    legacyCount: number
+  }
+
+  const statsMap = new Map<string, PartyStats>()
+  for (const party of parties) {
+    statsMap.set(party.id, {
+      totalDebt: 0,
+      totalPaid: 0,
+      confirmedCount: 0,
+      pendingDebt: 0,
+      pendingPaid: 0,
+      pendingCount: 0,
+      awaitingMyActionCount: 0,
+      rejectedCount: 0,
+      lastActivityAt: null,
+      hasPendingForMe: false,
+      legacyRemaining: 0,
+      legacyCount: 0,
+    })
+  }
 
   for (const entry of entries) {
     if (!isVisibleTo(entry, viewerId)) continue
     const pid = partyIdForViewer(entry, viewerId)
     if (!pid) continue
-    const bucket = byParty.get(pid)
-    if (bucket) bucket.push(entry)
+    const stats = statsMap.get(pid)
+    if (!stats) continue
+
+    const at = entry.occurredAt || entry.createdAt
+    if (!stats.lastActivityAt || at > stats.lastActivityAt) {
+      stats.lastActivityAt = at
+    }
+
+    if (countsInBalance(entry)) {
+      const effect = entryEffect(entry)
+      if (effect >= 0) stats.totalDebt = addMinor(stats.totalDebt, effect)
+      else stats.totalPaid = addMinor(stats.totalPaid, -effect)
+      stats.confirmedCount += 1
+    } else if (entry.status === 'confirmed' && entry.excludedFromBalance) {
+      stats.legacyRemaining += entryEffect(entry)
+      stats.legacyCount += 1
+    } else if (entry.status === 'pending') {
+      if (entry.entryType === 'debt') stats.pendingDebt = addMinor(stats.pendingDebt, entry.amountMinor)
+      else stats.pendingPaid = addMinor(stats.pendingPaid, entry.amountMinor)
+      stats.pendingCount += 1
+      if (entry.scope === 'shared' && entry.creatorId !== viewerId) {
+        stats.awaitingMyActionCount += 1
+        stats.hasPendingForMe = true
+      }
+    } else if (entry.status === 'rejected' || entry.status === 'cancelled') {
+      stats.rejectedCount += 1
+    }
   }
 
   return parties.map((party) => {
-    const list = byParty.get(party.id) ?? []
-    const totals = computeTotals(list, viewerId)
-    let lastActivityAt: string | null = null
-    let legacyRemaining = 0
-    let legacyCount = 0
-    for (const e of list) {
-      const at = e.occurredAt || e.createdAt
-      if (!lastActivityAt || at > lastActivityAt) lastActivityAt = at
-      if (e.status === 'confirmed' && e.excludedFromBalance) {
-        legacyRemaining += entryEffect(e)
-        legacyCount += 1
-      }
-    }
-    const hasPendingForMe = list.some(
-      (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
-    )
+    const stats = statsMap.get(party.id)!
+    const remaining = subMinor(stats.totalDebt, stats.totalPaid)
     return {
       party,
-      totalDebt: totals.totalDebt,
-      totalPaid: totals.totalPaid,
-      remaining: totals.remaining,
-      ratio: paymentRatio(totals.totalPaid, totals.totalDebt),
-      lastActivityAt,
-      entryCount: totals.confirmedCount,
-      hasPendingForMe,
-      pendingCount: totals.pendingCount,
-      legacyRemaining,
-      legacyCount,
-      isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      totalDebt: stats.totalDebt,
+      totalPaid: stats.totalPaid,
+      remaining,
+      ratio: paymentRatio(stats.totalPaid, stats.totalDebt),
+      lastActivityAt: stats.lastActivityAt,
+      entryCount: stats.confirmedCount,
+      hasPendingForMe: stats.hasPendingForMe,
+      pendingCount: stats.pendingCount,
+      legacyRemaining: stats.legacyRemaining,
+      legacyCount: stats.legacyCount,
+      isFullyPaid: stats.totalDebt > 0 && remaining <= 0,
     }
   })
 }
