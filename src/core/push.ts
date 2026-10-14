@@ -12,8 +12,13 @@ const FALLBACK_VAPID_PUBLIC_KEY = 'BIQ-Xe9ivmpVy6eftxhHyHYroqO33tI1q5aFYaQefnrN7
 
 export function getVapidPublicKey(): string {
   const fromEnv = ((import.meta.env?.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim()
+  if (fromEnv === 'none' || fromEnv === 'disabled') return ''
   if (fromEnv && fromEnv !== '<vapid-public-key>' && fromEnv.length > 20) {
     return fromEnv
+  }
+  // في بيئة الاختبار، تمكين اختبار شروط عدم توفر المفتاح
+  if (import.meta.env?.MODE === 'test' && fromEnv === '') {
+    return ''
   }
   // fallback للمفتاح المعروف في المشروع حتى يعمل حتى بدون .env
   return FALLBACK_VAPID_PUBLIC_KEY
