@@ -194,19 +194,24 @@ export const PARTY_SORT_LABELS: Record<PartySort, string> = {
   newest: 'الأحدث إضافة',
 }
 
-/** توحيد النص العربي للبحث: إزالة التشكيل وتوحيد الألف والهاء */
+const DIACRITICS_REGEX = /[\u064B-\u0652\u0670\u0640]/g
+const NORM_MAP: Record<string, string> = {
+  'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا',
+  'ى': 'ي', 'ئ': 'ي',
+  'ؤ': 'و',
+  'ة': 'ه',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+}
+const CHAR_REPLACE_REGEX = /[أإآٱىؤئة٠-٩۰-۹]/g
+
+/** توحيد النص العربي للبحث: إزالة التشكيل وتوحيد الألف والهاء (محسّنة بأدنى تخصيص للمصفوفات والسلاسل) */
 export function normalizeArabic(input: string): string {
   return input
     .trim()
     .toLowerCase()
-    .replace(/[\u064B-\u0652\u0670\u0640]/g, '') // تشكيل وتطويل
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(DIACRITICS_REGEX, '')
+    .replace(CHAR_REPLACE_REGEX, (ch) => NORM_MAP[ch] || ch)
     .replace(/\s+/g, ' ')
 }
 
@@ -242,8 +247,9 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
-    if (haystack.includes(q)) return true
+    if (normalizeArabic(s.party.name).includes(q)) return true
+    if (s.party.note && normalizeArabic(s.party.note).includes(q)) return true
+    if (s.party.address && normalizeArabic(s.party.address).includes(q)) return true
     if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
     return false
   })
