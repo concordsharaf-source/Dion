@@ -1,0 +1,3 @@
+## 2026-09-23 - Pre-computing Normalized Search Fields on Summaries
+**Learning:** In Arabic text processing, `normalizeArabic` applies multiple regex replace operations (diacritics, alef, heh, etc.). Performing normalization inside list filtering methods (`filterAndSortParties`) executes 24+ regex calls per item on every keystroke. Pre-computing `searchTarget` on the summary model (`PartySummary`) during summary creation reduces search filtering to O(1) string inclusion checks.
+**Action:** Always pre-compute normalized search targets on summary models when data is created/loaded rather than running regex normalizations inside render/filter loops.

@@ -121,11 +121,16 @@ export interface PartySummary {
   legacyRemaining: Minor
   legacyCount: number
   isFullyPaid: boolean
+  /** نص موحّد للبحث السريع (مُجهّز مسبقًا لمنع إعادة التطبيعي مع كل ضغطة زر) */
+  searchTarget?: string
+  /** رقم هاتف موحّد للبحث السريع */
+  searchPhone?: string
 }
 
 /**
  * يبني ملخصات كل الأطراف من قائمة عمليات + قائمة أطراف.
  * O(n) على العمليات — تُستخدم مباشرة في القوائم مع البحث والترتيب.
+ * تم التعديل لمعالجة الحركات في ممر واحد بدلاً من تكرار المصفوفة 3 مرات مع التجهيز المسبق لنصوص البحث.
  */
 export function summarizeParties(parties: Party[], entries: FinancialEntry[], viewerId: string): PartySummary[] {
   const byParty = new Map<string, FinancialEntry[]>()
@@ -141,34 +146,59 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
 
   return parties.map((party) => {
     const list = byParty.get(party.id) ?? []
-    const totals = computeTotals(list, viewerId)
-    let lastActivityAt: string | null = null
+    let totalDebt = 0
+    let totalPaid = 0
+    let confirmedCount = 0
+    let pendingCount = 0
     let legacyRemaining = 0
     let legacyCount = 0
+    let lastActivityAt: string | null = null
+    let hasPendingForMe = false
+
+    // ممر واحد O(n) بدلاً من 3 ممرات لتجميع الإجماليات والتاريخ والعمليات المعلقة
     for (const e of list) {
       const at = e.occurredAt || e.createdAt
       if (!lastActivityAt || at > lastActivityAt) lastActivityAt = at
-      if (e.status === 'confirmed' && e.excludedFromBalance) {
-        legacyRemaining += entryEffect(e)
-        legacyCount += 1
+
+      if (e.status === 'confirmed') {
+        if (e.excludedFromBalance) {
+          legacyRemaining = addMinor(legacyRemaining, entryEffect(e))
+          legacyCount += 1
+        } else {
+          const effect = entryEffect(e)
+          if (effect >= 0) totalDebt = addMinor(totalDebt, effect)
+          else totalPaid = addMinor(totalPaid, -effect)
+          confirmedCount += 1
+        }
+      } else if (e.status === 'pending') {
+        pendingCount += 1
+        if (e.scope === 'shared' && e.creatorId !== viewerId) {
+          hasPendingForMe = true
+        }
       }
     }
-    const hasPendingForMe = list.some(
-      (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
-    )
+
+    const remaining = subMinor(totalDebt, totalPaid)
+
+    // تجهيز نصوص البحث موحّدة مرة واحدة لكل طرف بدلاً من تطبيق التعبيرات النمطية في كل البحث
+    const searchTarget = `${normalizeArabic(party.name)} ${normalizeArabic(party.note ?? '')} ${normalizeArabic(party.address ?? '')}`
+    const searchPhone = party.phone ? normalizePhone(party.phone) : ''
+
     return {
       party,
-      totalDebt: totals.totalDebt,
-      totalPaid: totals.totalPaid,
-      remaining: totals.remaining,
-      ratio: paymentRatio(totals.totalPaid, totals.totalDebt),
+      totalDebt,
+      totalPaid,
+      remaining,
+      ratio: paymentRatio(totalPaid, totalDebt),
       lastActivityAt,
-      entryCount: totals.confirmedCount,
+      entryCount: confirmedCount,
       hasPendingForMe,
-      pendingCount: totals.pendingCount,
+      pendingCount,
       legacyRemaining,
       legacyCount,
-      isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      isFullyPaid: totalDebt > 0 && remaining <= 0,
+      searchTarget,
+      searchPhone,
     }
   })
 }
@@ -242,9 +272,14 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
+    // استخدام النصوص المجهّزة مسبقًا بدلاً من تشغيل معالجة التعبيرات النمطية في كل عنصر عند التصفية
+    const haystack = s.searchTarget ?? `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
     if (haystack.includes(q)) return true
-    if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
+
+    if (qIsPhone) {
+      const pPhone = s.searchPhone ?? (s.party.phone ? normalizePhone(s.party.phone) : '')
+      if (pPhone && pPhone.includes(phoneQuery)) return true
+    }
     return false
   })
 
