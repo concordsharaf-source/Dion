@@ -200,6 +200,20 @@ describe('البحث والترتيب', () => {
     expect(filterAndSortParties(summaries, { query: '7712' }).map((s) => s.party.id)).toEqual(['p3'])
   })
 
+  it('يجهّز حقول البحث المسبقة في الملخصات ويستخدمها في التصفية', () => {
+    const [s1] = summarizeParties(
+      [makeParty({ id: 'px', name: 'أحمد سعيد', note: 'عميل مميز', phone: '0771234567' })],
+      [],
+      MERCHANT,
+    )
+    expect(s1.searchHaystack).toBe('احمد سعيد عميل مميز')
+    expect(s1.normalizedPhone).toBe('771234567')
+
+    // التأكد من أن التصفية تعمل بالنص المجهّز مسبقًا
+    const customSummary = { ...s1, searchHaystack: 'اسم مختلف جدا' }
+    expect(filterAndSortParties([customSummary], { query: 'مختلف' })).toHaveLength(1)
+  })
+
   it('يخفي المؤرشف افتراضيًا', () => {
     const archived = summarizeParties([makeParty({ id: 'p9', archivedAt: '2026-09-01T00:00:00Z' })], [], MERCHANT)
     expect(filterAndSortParties(archived)).toHaveLength(0)
