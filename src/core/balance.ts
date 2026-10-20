@@ -121,6 +121,9 @@ export interface PartySummary {
   legacyRemaining: Minor
   legacyCount: number
   isFullyPaid: boolean
+  /** نص البحث ورقم الهاتف الموحّدان مسبقًا لمنع التكرار عند البحث بالتنقل في القوائم */
+  _normalizedSearchText?: string
+  _normalizedPhone?: string
 }
 
 /**
@@ -156,6 +159,10 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
     const hasPendingForMe = list.some(
       (e) => e.status === 'pending' && e.scope === 'shared' && e.creatorId !== viewerId,
     )
+    // تجهيز نصوص البحث والتطابق مسبقًا لتسريع الفلترة عند كتابة كل حرف
+    const _normalizedSearchText = normalizeArabic(`${party.name} ${party.note ?? ''} ${party.address ?? ''}`)
+    const _normalizedPhone = party.phone ? normalizePhone(party.phone) : ''
+
     return {
       party,
       totalDebt: totals.totalDebt,
@@ -169,6 +176,8 @@ export function summarizeParties(parties: Party[], entries: FinancialEntry[], vi
       legacyRemaining,
       legacyCount,
       isFullyPaid: totals.totalDebt > 0 && totals.remaining <= 0,
+      _normalizedSearchText,
+      _normalizedPhone,
     }
   })
 }
@@ -242,9 +251,12 @@ export function filterAndSortParties(summaries: PartySummary[], opts: FilterOpti
     if (onlyWithBalance && s.remaining <= 0) return false
     if (onlyPending && !s.hasPendingForMe) return false
     if (!q) return true
-    const haystack = `${normalizeArabic(s.party.name)} ${normalizeArabic(s.party.note ?? '')} ${normalizeArabic(s.party.address ?? '')}`
+    const haystack = s._normalizedSearchText ?? normalizeArabic(`${s.party.name} ${s.party.note ?? ''} ${s.party.address ?? ''}`)
     if (haystack.includes(q)) return true
-    if (qIsPhone && s.party.phone && normalizePhone(s.party.phone).includes(phoneQuery)) return true
+    if (qIsPhone) {
+      const phone = s._normalizedPhone ?? (s.party.phone ? normalizePhone(s.party.phone) : '')
+      if (phone.includes(phoneQuery)) return true
+    }
     return false
   })
 
