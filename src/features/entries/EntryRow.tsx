@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import clsx from 'clsx'
 import { ArrowDownLeft, ArrowUpRight, RotateCcw } from 'lucide-react'
 import { Money, StatusChip } from '@/components/ui'
@@ -6,8 +7,9 @@ import type { FinancialEntry } from '@/core/domain'
 
 /**
  * صف عملية مالية — يعرض الأثر والمبلغ والحالة بوضوح
+ * مغلّف بـ memo لتفادي إعادة الرسوم عند فتح التفاصيل أو تغيير فلتر أعلى القائمة
  */
-export function EntryRow({
+export const EntryRow = memo(function EntryRow({
   entry,
   viewerId,
   partyName,
@@ -84,4 +86,4 @@ export function EntryRow({
       </span>
     </button>
   )
-}
+})
