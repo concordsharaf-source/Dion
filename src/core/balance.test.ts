@@ -190,7 +190,13 @@ describe('البحث والترتيب', () => {
     expect(sorted.map((s) => s.party.id)).toEqual(['p2', 'p3', 'p1'])
   })
 
-  it('يبحث بالاسم مع تجاهل التشكيل واختلاف الألف', () => {
+  it('يجهز سلاسل النص الموحدة مسبقًا في الملخصات', () => {
+    const [s1, s2, s3] = summaries
+    expect(s1.normalizedHaystack).toBe('احمد علي')
+    expect(s3.normalizedPhone).toBe('771234567')
+  })
+
+  it('يبحث بالاسم مع تجاهل التشكيل واختلاف الألف باستعمال النصوص المجهزة مسبقًا', () => {
     expect(filterAndSortParties(summaries, { query: 'احمد' }).map((s) => s.party.id)).toEqual(['p1'])
     expect(filterAndSortParties(summaries, { query: 'أحمد' }).map((s) => s.party.id)).toEqual(['p1'])
     expect(filterAndSortParties(summaries, { query: 'محمد' }).map((s) => s.party.id)).toEqual(['p2'])
